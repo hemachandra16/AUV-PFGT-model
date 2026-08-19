@@ -121,3 +121,56 @@ Peak VRAM was **7.19 GB of 8.19 GB at batch_size=8** on the UNMODIFIED model. Ro
 attention materialises a (B, N, N) score matrix with N = 64x64 = 4096 tokens
 (8 x 4096 x 4096 fp16 = 268 MB per branch, plus autograd saves). A naive multi-head
 rewrite would make this (B, H, N, N) = 4x worse and OOM immediately. See D-007.
+
+### D-007 — attention rewritten around scaled_dot_product_attention (memory)
+D-006 showed only 1 GB of VRAM headroom. A textbook multi-head rewrite materialises a
+`(B, H, N, N)` score tensor — at N=4096, H=4, bs=8 that is ~1 GB per branch in fp16 plus
+autograd saves, and would have OOMed immediately. Two choices avoided that:
+  * the physics bias is per-key, shape `(B, H, 1, N)`, which broadcasts over queries.
+    This is also the faithful reading of docs/math.md sec 5 ("P is the projected physics
+    feature map" — a feature map has one value per spatial position, not N^2 values).
+  * `F.scaled_dot_product_attention` then never materialises the N x N matrix.
+Net: peak VRAM at bs=8 went DOWN from 7.19 GB to 5.19 GB while ADDING ~66k parameters
+per attention module.
+
+### D-008 — GPU is power-capped to 19 W of 77 W; training re-planned around it  [IMPORTANT]
+Roughly 20 minutes into the main run, epochs went from ~55 s to ~146 s and stayed there
+even after all background downloads finished. Diagnosis:
+
+```
+temperature.gpu  52 C          <- NOT thermal
+clocks.sm        585 MHz       <- of 3105 MHz max (19%)
+power.draw       19.46 W       <- of a 77 W board
+clocks_event_reasons.active  0x4  = SW Power Cap
+Win32_Battery BatteryStatus = 2 (on AC), charge 100%
+Active power scheme: Balanced
+```
+So the machine is plugged in and cool, but Windows' Balanced power mode (or the OEM
+embedded controller) holds the dGPU at ~25% of its clock under sustained load. The 2.65x
+slowdown matches the 55 s -> 146 s change exactly.
+
+**I did not change the power plan.** Altering system power settings on someone's machine
+unattended is out of scope for this task, and it would persist after I finish. Instead I
+re-planned the training to fit the compute actually available.
+
+If the user wants the ~2.6x back, from an **Administrator** PowerShell:
+```
+powercfg /setactive SCHEME_MIN          # High performance
+```
+and set Settings > System > Power & battery > Power mode = "Best performance".
+Re-running the same training at full clock should take ~55 s/epoch instead of ~146 s.
+
+### D-009 — enhancement run re-scoped from 150 to 65 epochs
+At 146 s/epoch, 150 epochs is 6.1 hours — more than the entire session budget, and it
+would have left no time for the detection work (the advisor's actual ask). Options were
+(a) stop at ~epoch 80 with the cosine LR schedule only half-finished, leaving the model
+un-annealed and needlessly undertrained, or (b) resume with a shorter total so the
+warmup+cosine schedule completes properly.
+
+Chose (b): stopped at epoch 19 and resumed from `checkpoints/latest.pt` with
+`--epochs 65`. Because the LR is computed from `global_step / total_steps`, resuming at
+step 1900 against a 6500-step total puts it correctly at 24% of the schedule
+(observed LR on resume: 1.74e-4), and it now anneals to `eta_min` by epoch 65.
+No progress was discarded. Cost: a model trained 65 epochs rather than 150.
+This is a compute-budget limitation, not a convergence result — stated as such in
+FINAL_REPORT.md.
