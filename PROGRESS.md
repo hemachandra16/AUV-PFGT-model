@@ -20,19 +20,41 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked / work
 - [x] 0.9 `smoke_test_amp.py` -> "Smoke test with AMP passed!"; `smoke_test_sm120.py` -> "Smoke test passed! No CUDA errors" (fine — this GPU is sm_89, not sm_120). **GATE**: `tools/gate_check.py` ran 5 real training steps on real UIEB pairs: **loss 0.852788 -> 0.608016 (delta -0.2448)**, peak VRAM 7.19 GB @ bs=8
 - [x] 0.10 Commit `45d3d1e`
 
-## PHASE 1 — Fix core attention bug
-- [ ] 1.1 Real Q/K/V projections + multi-head in physics_attention.py
-- [ ] 1.2 Upgrade physics bias from rank-1 scalar to projected per-position bias
-- [ ] 1.3 models/build.py::build_model() single source of truth; update 8 entry points
-- [ ] 1.4 L_frequency loss + lambda_frequency config
-- [ ] 1.5 Smoke-train verification (loss decreases, visible output change)
-- [ ] 1.6 Commit
+## PHASE 1 — Fix core attention bug — COMPLETE (commit 3580b40)
+- [x] 1.1 Real Q/K/V + out projections, multi-head split, in `models/attention/physics_attention.py`
+- [x] 1.2 Physics bias upgraded: rank-1 scalar outer product -> per-head per-position projected bias `(B, H, 1, N)`
+- [x] 1.3 `models/build.py::build_model()` is the only model constructor; all 8 entry points updated; class default `num_heads` 1 -> 4
+- [x] 1.4 `L_frequency` (Haar-DWT sub-band L1) + `lambda_frequency: 0.15` in config
+- [x] 1.5 **VERIFIED** — `tools/verify_attention.py`, all 4 checks PASS (see evidence below)
+- [x] 1.6 Commit `3580b40`
 
-## PHASE 2 — Eval pipeline correctness
-- [ ] 2.1 Shared seeded 90/10 split in data/dataset.py
-- [ ] 2.2 Wire training.save_every_epochs
-- [ ] 2.3 Re-verify detection "grid of boxes" does not reproduce
-- [ ] 2.4 Commit
+### Phase 1 evidence (`python tools/verify_attention.py`)
+```
+CHECK 1 - convex-hull limitation (the actual bug)
+  task: learn tokens -> tokens + 3.0 (a pure colour shift, outside the hull)
+  OLD module learnable params :    66  (no Q/K/V projections at all)
+  NEW module learnable params : 66309
+  input  mean : -0.0069   target mean : +2.9931
+  OLD output mean after fitting: -0.0069   final MSE:   9.00000   <-- 9.0 == 3.0^2, learned NOTHING
+  NEW output mean after fitting: +2.9943   final MSE:   0.39800
+CHECK 2 - output responds to the physics feature map : 146.76% relative change  PASS
+CHECK 3 - num_heads changes the computation         : mean |diff| 0.256413    PASS
+CHECK 4 - full model fwd+bwd, 2,729,450 params, all grads finite, peak VRAM 2.60 GB (bs=4)  PASS
+```
+The old attention module was mathematically incapable of a global colour shift — the
+single most important operation in underwater colour correction. That is the bug.
+
+### VRAM went DOWN despite adding parameters
+Switching to `scaled_dot_product_attention` with a broadcastable `(B, H, 1, N)` physics
+bias means the `(B, N, N)` score matrix is never materialised. Measured peak at bs=8:
+**7.19 GB (old) -> 5.19 GB (new)**. bs=12 also fits (7.76 GB). Kept bs=8 to match the
+baseline's training config so the comparison stays fair, and to leave GPU headroom.
+
+## PHASE 2 — Eval pipeline correctness — COMPLETE (commit 3580b40)
+- [x] 2.1 `data/dataset.py::get_splits()` — one seeded 90/10 split shared by train.py, validate.py, test.py. **Verified: 801 train / 89 val / 890 total.** validate.py & test.py gained `--split {val,train,full}`, defaulting to held-out `val`
+- [x] 2.2 `training.save_every_epochs` now writes `checkpoints/epoch_N.pt` (was configured but never used); `early_stopping.metric` now honoured (was hardcoded to PSNR); dead `scheduler.total_epochs` key removed
+- [ ] 2.3 Re-verify detection "grid of boxes" does not reproduce — deferred to Phase 3 (the new detector replaces that code path entirely; will verify on the fine-tuned model)
+- [x] 2.4 Commit `3580b40`
 
 ## PHASE 3 — Real underwater object detection
 - [ ] 3.1 Choose + fetch dataset (RUOD primary, DUO/UTDAC2020 fallback)

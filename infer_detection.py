@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from models.build import build_model
-from models.object_detection import UnderwaterObjectDetector, annotate_image_with_detections
+from models.object_detection import build_detector, annotate_image_with_detections
 from utils.checkpoint import load_checkpoint
 from utils.logging_utils import setup_logger
 
@@ -37,8 +37,17 @@ def parse_args() -> argparse.Namespace:
                         help="Output path for single image mode")
     parser.add_argument("--output-dir", type=str, default="outputs/detection",
                         help="Output directory for folder mode")
-    parser.add_argument("--conf-thresh", type=float, default=0.45,
+    parser.add_argument("--conf-thresh", type=float, default=0.25,
                         help="Detection confidence threshold")
+    parser.add_argument("--iou-thresh", type=float, default=0.45,
+                        help="NMS IoU threshold (now actually applied)")
+    parser.add_argument("--detector", type=str, default="auto",
+                        choices=["auto", "yolo", "fasterrcnn"],
+                        help="'yolo' = RUOD fine-tuned (real underwater classes); "
+                             "'fasterrcnn' = legacy COCO model with hand-mapped names; "
+                             "'auto' = yolo if weights exist, else fasterrcnn")
+    parser.add_argument("--detector-weights", type=str, default=None,
+                        help="Path to fine-tuned detector weights")
     parser.add_argument("--device", type=str, default="auto",
                         choices=["auto", "cpu", "cuda"])
     return parser.parse_args()
@@ -56,7 +65,7 @@ def get_device(device_arg: str) -> torch.device:
 
 def process_image(
     enhancer: torch.nn.Module,
-    detector: UnderwaterObjectDetector,
+    detector,
     image_path: Path,
     output_path: Path,
     device: torch.device,
@@ -111,8 +120,18 @@ def main() -> None:
     enhancer.eval()
 
     # Load Detector Model
-    detector = UnderwaterObjectDetector(conf_threshold=args.conf_thresh).to(device)
+    detector = build_detector(
+        backend=args.detector,
+        weights=args.detector_weights,
+        conf_threshold=args.conf_thresh,
+        iou_threshold=args.iou_thresh,
+    )
     detector.eval()
+    if hasattr(detector, "model") and hasattr(detector.model, "to"):
+        try:
+            detector.to(device)
+        except Exception:
+            pass  # Ultralytics manages its own device placement.
 
     input_path = Path(args.input)
 
