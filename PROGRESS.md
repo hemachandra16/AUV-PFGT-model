@@ -1,6 +1,6 @@
 # PFGT-UIE — Autonomous Fix + Detection + Overnight Training Run
 
-**Session start:** 2026-08-20 ~00:15 local
+**Session start:** 2026-08-20 ~00:15 local — **ALL PHASES COMPLETE ~04:50**
 **Operator:** unattended (bypass-permissions). All decisions made autonomously and logged here.
 **Machine:** Ryzen 7 7840HS / 16 GB RAM / RTX 4060 Laptop 8 GB (sm_89, Ada) / driver 592.82 (CUDA up to 13.1) / 135 GB free on D:
 
@@ -56,25 +56,54 @@ baseline's training config so the comparison stays fair, and to leave GPU headro
 - [ ] 2.3 Re-verify detection "grid of boxes" does not reproduce — deferred to Phase 3 (the new detector replaces that code path entirely; will verify on the fine-tuned model)
 - [x] 2.4 Commit `3580b40`
 
-## PHASE 3 — Real underwater object detection
-- [ ] 3.1 Choose + fetch dataset (RUOD primary, DUO/UTDAC2020 fallback)
-- [ ] 3.2 Convert to YOLO format
-- [ ] 3.3 Fine-tune YOLO11n/YOLOv8n
-- [ ] 3.4 Wire into models/object_detection.py + infer_detection.py
-- [ ] 3.5 Report mAP@0.5 to results/detection_metrics.json
-- [ ] 3.6 Sample end-to-end outputs to outputs/_phase3_check/
-- [ ] 3.7 Commit
+## PHASE 3 — Real underwater object detection — COMPLETE
+- [x] 3.1 Dataset: **RUOD** (the primary recommendation) — 14,000 real underwater images, 10 marine classes, fetched from the public HF repo `Mortallll/RUOD`, no auth needed
+- [x] 3.2 Converted COCO -> YOLO: **9,800 train / 4,200 val, 51,932 + 22,968 boxes, 0 missing, 4 degenerate boxes dropped**. Labels visually verified by re-rendering onto images (`outputs/_phase3_check/label_sanity_check.png`)
+- [x] 3.3 Fine-tuned **YOLO11n**, 20 epochs @ 640 px, batch 16, 2.4 GB VRAM (`logs/detection_train.log`)
+- [x] 3.4 Wired into `models/object_detection.py` (`build_detector`) as the default; legacy COCO path kept as `--detector fasterrcnn`
+- [x] 3.5 **mAP@0.5 = 0.8292**, mAP@0.5:0.95 = 0.5845, P = 0.8385, R = 0.7561 -> `results/detection_metrics.json`
+- [x] 3.6 End-to-end panels for 3 held-out images -> `outputs/_phase3_check/`
+- [x] 3.7 Commit
 
-## PHASE 4 — Overnight enhancement training run
-- [ ] 4.1 Launch background training -> logs/train.log
-- [ ] 4.2 Periodic check-ins (every 30-45 min)
-- [ ] 4.3 Final leakage-free validate.py
-- [ ] 4.4 Sample infer.py outputs -> outputs/_final_check/
-- [ ] 4.5 Commit
+### Phase 3 evidence
+Per-class AP@0.5: cuttlefish 0.965, turtle 0.965, diver 0.929, echinus 0.880, starfish 0.862,
+jellyfish 0.787, holothurian 0.751, fish 0.746, scallop 0.714, corals 0.694.
 
-## PHASE 5 — Final report
-- [ ] 5.1 FINAL_REPORT.md
-- [ ] 5.2 README/docs cleanup
+Same enhanced frames, both detectors:
+```
+708_img_  YOLO: 2 boxes [corals, fish]        | legacy: 0 boxes (found nothing)
+493_img_  YOLO: 2 boxes [cuttlefish, turtle]  | legacy: 3 boxes 'sea_bird' (raw COCO: bird)
+497_img_  YOLO: 18 boxes [fish]               | legacy: raw COCO labels = bird, frisbee, spoon, toothbrush
+```
+
+### Phase 2.3 (deferred) — "grid of hundreds of boxes" re-verified ABSENT
+```
+max boxes on any sample: 18 (sane limit 60)
+'grid of hundreds of boxes' bug reproduced: False
+```
+`tools/detection_check.py` now asserts this automatically, so a regression is caught rather
+than eyeballed.
+
+## PHASE 4 — Enhancement training run — COMPLETE (time-boxed)
+- [x] 4.1 Launched as a background process -> `logs/train.log`
+- [x] 4.2 Monitored throughout; two interventions logged (D-009 re-scope, D-012 crash + resume)
+- [x] 4.3 Leak-free `validate.py` on the held-out 89: **PSNR 24.9558, SSIM 0.9261, UIQM 10.1351, UCIQE 0.3125**
+- [x] 4.4 Six sample triptychs -> `outputs/_final_check/`; before/after panels -> `outputs/_phase1_check/`
+- [x] 4.5 Commit
+
+**Result stated plainly: the retrained model did NOT beat the baseline.**
+| Model | Epochs | PSNR | SSIM |
+|---|---|---|---|
+| Baseline (pre-fix) | 115 | 25.114 dB | 0.9281 |
+| Retrained (post-fix) | 50 | 24.956 dB | 0.9261 |
+
+It was still improving at the epoch limit (last five validations 24.78 / 24.81 / 24.77 /
+24.79 / 24.81). The comparison is not like-for-like on training budget — see FINAL_REPORT.md §4.1.
+No CUDA OOM occurred at any point, so the halve-batch-size contingency was never needed.
+
+## PHASE 5 — Final report — COMPLETE
+- [x] 5.1 `FINAL_REPORT.md` written
+- [x] 5.2 README drift fixed (nonexistent `infer.py --batch-size`, LR 1e-4 -> 2e-4, batch 4 -> 8, new config rows, detection usage, updated repo tree); `docs/architecture.md` Module 5 implementation notes + new Module 8 on the detection stage
 
 ---
 
