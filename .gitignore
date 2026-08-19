@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual Environment
+.venv/
+
+# Model Checkpoints
+checkpoints/
+
+# Logs
+logs/
+
+# Outputs
+outputs/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+# Datasets (large, not versioned)
+datasets/
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+
+# Archive of stray duplicates
+_archive/
+
+# Ultralytics runs
+runs/

@@ -1,0 +1,66 @@
+# ============================================================
+# PFGT-UIE Training Configuration
+# ============================================================
+# All values here are used as defaults; CLI args override them.
+
+# ---- Dataset -----------------------------------------------
+dataset:
+  root_dir: null               # null = auto-detect (project root)
+  raw_dir: null                # null = <root>/datasets/UIEB/raw-890
+  reference_dir: null          # null = <root>/datasets/UIEB/reference-890
+  image_size: 256
+
+# ---- DataLoader --------------------------------------------
+dataloader:
+  batch_size: 8
+  num_workers: 2
+  pin_memory: true
+  train_split: 0.9             # 90% train, 10% validation
+
+# ---- Model -------------------------------------------------
+model:
+  embed_dim: 128
+  num_heads: 4
+
+# ---- Loss weights ------------------------------------------
+loss:
+  lambda_l1: 1.0
+  lambda_ssim: 0.5
+  lambda_perceptual: 0.1
+
+# ---- Optimizer ---------------------------------------------
+optimizer:
+  lr: 2.0e-4
+  weight_decay: 1.0e-4
+  betas: [0.9, 0.999]
+
+# ---- LR Schedule -------------------------------------------
+scheduler:
+  warmup_epochs: 5             # linear warm-up from lr/10 to lr
+  total_epochs: 150
+  eta_min: 1.0e-6              # cosine annealing floor
+
+# ---- Training ----------------------------------------------
+training:
+  epochs: 150
+  seed: 42
+  amp: true                    # Automatic Mixed Precision
+  grad_clip_norm: 1.0          # max gradient norm
+  log_every_steps: 10          # print/TensorBoard every N steps
+  save_every_epochs: 10        # save periodic checkpoints
+
+# ---- Early Stopping ----------------------------------------
+early_stopping:
+  enabled: true
+  patience: 20                 # epochs without val loss improvement
+  metric: "psnr"               # metric to monitor (higher = better)
+  min_delta: 0.01              # minimum improvement to reset patience
+
+# ---- Checkpoints -------------------------------------------
+checkpoint:
+  dir: checkpoints
+
+# ---- Logging -----------------------------------------------
+logging:
+  log_dir: logs
+  tensorboard_dir: logs/tensorboard
