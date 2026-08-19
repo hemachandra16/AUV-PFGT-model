@@ -1,0 +1,38 @@
+{
+  "checkpoint": "checkpoints\\_baseline_before_fixes\\best.pt",
+  "note": "Pre-fix architecture (commit ad0f4d8) scored with the FIXED UCIQE metric.",
+  "checkpoint_epoch": 115,
+  "checkpoint_saved_metrics": {
+    "val_loss": 0.13721564039587975,
+    "psnr": 24.96240439372875,
+    "ssim": 0.9267915487289429,
+    "avg_train_loss": 0.11335334822535514
+  },
+  "heads_1_val": {
+    "psnr": 25.11406266109916,
+    "ssim": 0.9281400334968996,
+    "uiqm": 10.00091684880836,
+    "uciqe": 0.3133143389127181,
+    "n_images": 89
+  },
+  "heads_1_train": {
+    "psnr": 27.47778560269781,
+    "ssim": 0.9491881804817476,
+    "uiqm": 10.002859701548882,
+    "uciqe": 0.3126359749724935,
+    "n_images": 801
+  },
+  "heads_1_full_890_estimate": {
+    "psnr": 27.241413308537947,
+    "ssim": 0.9470833657832628,
+    "note": "What the old leaky evaluation would have reported over all 890."
+  },
+  "heads_4_val": {
+    "psnr": 25.115084227234615,
+    "ssim": 0.9281772930970352,
+    "uiqm": 9.996594326418338,
+    "uciqe": 0.31334532208970006,
+    "n_images": 89
+  },
+  "num_heads_mismatch_psnr_delta": 0.0010215661354529004
+}

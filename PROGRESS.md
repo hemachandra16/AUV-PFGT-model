@@ -210,3 +210,40 @@ UIEB. I did **not** change it — unlike UCIQE it is not numerically broken (no 
 degenerate values), and the discrepancy looks like a coefficient/scaling convention
 difference between UIQM variants. Flagged for the user rather than silently altered,
 since changing it would break comparability with previously logged runs.
+
+### D-011 — leakage confirmed exactly; num_heads mismatch measured as negligible
+`tools/eval_baseline.py` re-scores the ORIGINAL pre-fix checkpoint (epoch 115) using the
+pre-fix architecture from the `_archive/baseline_code` worktree, but with the corrected
+split and the fixed UCIQE.
+
+**Train/eval leakage — audit confirmed, essentially to the decimal:**
+```
+old leaky all-890 evaluation would report : PSNR 27.2414 dB   (logs/test.log said 27.24)
+honest held-out figure (89 images)        : PSNR 25.1141 dB
+inflation from leakage                    : +2.1274 dB
+    held-out 89 : PSNR 25.1141   train 801 : PSNR 27.4778
+```
+The model scores 2.36 dB higher on images it trained on. That is the whole gap.
+
+**num_heads mismatch — REAL bug, but measured impact ~0:**
+```
+baseline weights @ num_heads=1 (what every eval script used): PSNR 25.1141 dB
+baseline weights @ num_heads=4 (what train.py actually used): PSNR 25.1151 dB
+cost of the silent mismatch                                 : +0.0010 dB
+```
+The audit called this CRITICAL. The code defect was exactly as described, but on this
+checkpoint it costs one thousandth of a dB, so it is NOT an explanation for any observed
+quality problem. Reported honestly rather than claimed as a win.
+
+The reason is instructive: in the OLD module `num_heads` only altered the softmax scale
+divisor (`head_dim**0.5`), since Q=K=V and no head split ever happened. **After the Phase 1
+fix, `num_heads` genuinely changes the computation** — `verify_attention.py` check 3
+measures a 0.256 mean-absolute difference between 1 and 4 heads on identical weights. So
+`models/build.py` is load-bearing *going forward* even though it recovered no accuracy
+retroactively.
+
+### Baseline reference numbers (all later comparisons use these)
+Pre-fix checkpoint, epoch 115, held-out 89 images, fixed UCIQE:
+| PSNR | SSIM | UIQM | UCIQE |
+|---|---|---|---|
+| 25.1141 dB | 0.9281 | 10.0009 | 0.3133 |
