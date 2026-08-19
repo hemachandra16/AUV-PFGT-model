@@ -247,3 +247,29 @@ Pre-fix checkpoint, epoch 115, held-out 89 images, fixed UCIQE:
 | PSNR | SSIM | UIQM | UCIQE |
 |---|---|---|---|
 | 25.1141 dB | 0.9281 | 10.0009 | 0.3133 |
+
+### D-012 — training crashed at epoch 26 (my fault); recovered from checkpoint
+`logs/train_stdout2.log`:
+```
+[W CachingHostAllocator.cpp:26] Warning: Exception in pinned allocator free(), rethrowing
+Unhandled exception caught in c10/util/AbortHandler.h
+```
+Host RAM exhaustion, not VRAM. I ran `tools/eval_baseline.py` (scoring 801+89+89 images)
+and a native-resolution `infer.py` (1536x814) on CPU *while* training was running with
+`pin_memory: true`. On a 16 GB machine that starved the pinned-memory allocator and killed
+the training process. Entirely self-inflicted — a lesson about this machine's RAM budget,
+not a defect in the training code.
+
+Recovery cost nothing: `checkpoints/latest.pt` held epoch 25 and `best.pt` epoch 22, so I
+resumed from epoch 25. This is exactly the failure the per-epoch checkpointing (and the
+newly-wired `save_every_epochs` snapshots) exist for.
+
+Rule adopted for the rest of the session: **no heavy CPU jobs while training runs.**
+
+### D-013 — enhancement target cut again, 65 -> 50 epochs
+After the crash the arithmetic no longer left room for the detection work, which is the
+advisor's actual ask and had no results yet. Resumed from epoch 25 with `--epochs 50`
+(25 more epochs, ~1.05 h) so the cosine schedule still anneals to `eta_min` at the new
+horizon, then hand the GPU to detector fine-tuning. Sequencing detection *after* a
+shortened enhancement run (rather than before) keeps a converged enhancement checkpoint
+while still guaranteeing the detection deliverable lands.
