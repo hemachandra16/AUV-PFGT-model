@@ -2,7 +2,7 @@ import time
 import torch
 from data.dataset import UIEBDataset
 from torch.utils.data import DataLoader
-from models.model import PFGTUIEModel
+from models.build import build_model
 from models.loss import PFGTLoss
 from torch.amp import autocast, GradScaler
 import yaml
@@ -11,7 +11,7 @@ import os
 
 def profile_step():
     device = torch.device("cuda")
-    model = PFGTUIEModel().to(device)
+    model = build_model(device=device)
     criterion = PFGTLoss().to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
     scaler = GradScaler()

@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from models.model import PFGTUIEModel
+from models.build import build_model
 from utils.checkpoint import load_checkpoint
 from utils.logging_utils import setup_logger
 
@@ -84,7 +84,7 @@ def main() -> None:
     device = get_device(args.device)
     logger.info("Native resolution inference on device: %s", device)
 
-    model = PFGTUIEModel().to(device)
+    model = build_model(device=device)
     load_checkpoint(args.checkpoint, model=model, device=device)
     model.eval()
     logger.info("Loaded checkpoint: %s", args.checkpoint)

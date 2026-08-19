@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 
 
 class UIEBDataset(Dataset[Tuple[torch.Tensor, torch.Tensor]]):
@@ -142,3 +142,77 @@ def create_dataloader(
         num_workers=num_workers,
         pin_memory=pin_memory,
     )
+
+
+def get_splits(
+    config: Optional[dict] = None,
+    root_dir: Optional[Union[str, Path]] = None,
+    raw_dir: Optional[Union[str, Path]] = None,
+    reference_dir: Optional[Union[str, Path]] = None,
+    image_size: Optional[int] = None,
+    train_split: Optional[float] = None,
+    seed: int = 42,
+    augment_train: bool = True,
+) -> Tuple[Subset, Subset]:
+    """Return the project's canonical (train, validation) split of the UIEB dataset.
+
+    This is the SINGLE definition of the split. It reproduces exactly what ``train.py``
+    used to do inline: a ``torch.randperm`` over all pairs under a generator seeded with
+    ``seed`` (42), taking the first ``train_split`` fraction as train and the remainder
+    as validation.
+
+    Why this exists: ``validate.py`` and ``test.py --mode dataset`` previously
+    instantiated ``UIEBDataset`` over all 890 pairs and scored every one of them, which
+    silently included the ~801 images the model had trained on. That leakage is what
+    inflated the reported test PSNR (27.24 dB in logs/test.log) well above the true
+    held-out validation PSNR observed during training (24.96 dB). Routing every script
+    through this function means evaluation can only ever see the held-out 10%.
+
+    Args:
+        config: Optional full training config dict; ``dataset`` and ``dataloader``
+            sections are read from it when the explicit arguments are not given.
+        root_dir / raw_dir / reference_dir / image_size: Dataset location and sizing.
+        train_split: Fraction of pairs used for training (default 0.9).
+        seed: Split RNG seed. Must stay 42 to match previously trained checkpoints.
+        augment_train: Whether the training subset applies augmentation. The validation
+            subset is never augmented.
+
+    Returns:
+        ``(train_subset, val_subset)`` — both ``torch.utils.data.Subset`` objects.
+    """
+    config = config or {}
+    ds_cfg = config.get("dataset", {}) or {}
+    dl_cfg = config.get("dataloader", {}) or {}
+
+    root_dir = root_dir if root_dir is not None else ds_cfg.get("root_dir")
+    raw_dir = raw_dir if raw_dir is not None else ds_cfg.get("raw_dir")
+    reference_dir = reference_dir if reference_dir is not None else ds_cfg.get("reference_dir")
+    image_size = image_size if image_size is not None else ds_cfg.get("image_size", 256)
+    train_split = train_split if train_split is not None else dl_cfg.get("train_split", 0.9)
+
+    if not 0.0 < train_split < 1.0:
+        raise ValueError(f"train_split must be in (0, 1), got {train_split}.")
+
+    common = dict(
+        root_dir=root_dir,
+        raw_dir=raw_dir,
+        reference_dir=reference_dir,
+        image_size=image_size,
+    )
+    # Two dataset instances so the training subset can augment while validation does not.
+    train_base = UIEBDataset(augment=augment_train, **common)
+    val_base = UIEBDataset(augment=False, **common)
+
+    n_total = len(train_base)
+    n_train = int(n_total * train_split)
+
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randperm(n_total, generator=generator).tolist()
+    train_indices, val_indices = indices[:n_train], indices[n_train:]
+
+    return Subset(train_base, train_indices), Subset(val_base, val_indices)
+
+
+def subset_pair_names(subset: Subset) -> list[str]:
+    """Filenames backing a Subset produced by :func:`get_splits`, in iteration order."""
+    return [subset.dataset.pairs[i][0].name for i in subset.indices]

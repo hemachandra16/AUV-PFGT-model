@@ -1,11 +1,11 @@
 import torch
-from models.model import PFGTUIEModel
+from models.build import build_model
 from torch.amp import autocast, GradScaler
 
 def run_smoke_test():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Initializing model on {device}...")
-    model = PFGTUIEModel().to(device)
+    model = build_model(device=device)
     
     print("Creating dummy input...")
     dummy_input = torch.randn(2, 3, 256, 256, device=device)

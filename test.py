@@ -25,7 +25,8 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 
-from models.model import PFGTUIEModel
+from data.dataset import get_splits, subset_pair_names
+from models.build import build_model
 from utils.checkpoint import load_checkpoint
 from utils.logging_utils import setup_logger
 from utils.seed import seed_everything
@@ -58,6 +59,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default="auto",
                         choices=["auto", "cpu", "cuda"])
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--split", type=str, default="val", choices=["val", "train", "full"],
+                        help="Dataset-mode split. 'val' (default) = held-out 10%%; "
+                             "'train'/'full' overlap training data, diagnostics only")
     return parser.parse_args()
 
 
@@ -130,7 +134,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load model
-    model = PFGTUIEModel().to(device)
+    model = build_model(device=device)
     load_checkpoint(args.checkpoint, model=model, device=device)
     model.eval()
     logger.info("Loaded checkpoint: %s", args.checkpoint)
@@ -157,8 +161,26 @@ def main() -> None:
         raw_dir = Path(args.raw_dir) if args.raw_dir else root / "datasets" / "UIEB" / "raw-890"
         ref_dir = Path(args.reference_dir) if args.reference_dir else root / "datasets" / "UIEB" / "reference-890"
 
-        images = collect_images(raw_dir)
-        logger.info("Dataset mode: %d images from %s", len(images), raw_dir)
+        # Use the SAME seeded split as train.py so reported metrics are genuinely
+        # held-out. Scoring all 890 pairs (the old behaviour) included the ~801 training
+        # images and inflated the numbers in logs/test.log.
+        train_subset, val_subset = get_splits(
+            raw_dir=args.raw_dir,
+            reference_dir=args.reference_dir,
+            image_size=args.image_size,
+            augment_train=False,
+        )
+        if args.split == "val":
+            names = subset_pair_names(val_subset)
+        elif args.split == "train":
+            names = subset_pair_names(train_subset)
+        else:
+            names = [p.name for p in collect_images(raw_dir)]
+            logger.warning(
+                "--split full scores TRAINING IMAGES TOO; not a held-out result."
+            )
+        images = [raw_dir / n for n in names]
+        logger.info("Dataset mode (split=%s): %d images from %s", args.split, len(images), raw_dir)
 
         psnr_sum = ssim_sum = 0.0
         n = 0
@@ -187,7 +209,8 @@ def main() -> None:
 
         logger.info("Saved %d enhanced images to: %s", len(images), output_dir)
         if n > 0:
-            logger.info("Average PSNR: %.4f dB | Average SSIM: %.4f", psnr_sum / n, ssim_sum / n)
+            logger.info("Split=%s | Average PSNR: %.4f dB | Average SSIM: %.4f",
+                        args.split, psnr_sum / n, ssim_sum / n)
 
     logger.info("Test complete.")
 

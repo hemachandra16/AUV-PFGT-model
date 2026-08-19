@@ -25,7 +25,7 @@ class PFGTUIEModel(nn.Module):
     6. Refine the reconstructed features into an enhanced RGB image.
     """
 
-    def __init__(self, embed_dim: int = 128, num_heads: int = 1) -> None:
+    def __init__(self, embed_dim: int = 128, num_heads: int = 4) -> None:
         super().__init__()
         if embed_dim <= 0:
             raise ValueError(f"embed_dim must be positive, got {embed_dim}.")

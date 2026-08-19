@@ -41,10 +41,10 @@ try:
 except ImportError:
     HAS_YAML = False
 
-from data.dataset import UIEBDataset, create_dataloader
+from data.dataset import UIEBDataset, create_dataloader, get_splits
 from metrics import compute_psnr, compute_ssim
 from models.loss import PFGTLoss
-from models.model import PFGTUIEModel
+from models.build import build_model
 from utils.checkpoint import load_checkpoint, save_checkpoint
 from utils.logging_utils import setup_logger
 from utils.seed import seed_everything
@@ -158,37 +158,16 @@ def build_dataloaders(
     debug_mode: bool,
 ) -> tuple[DataLoader, DataLoader]:
     """Create train and validation DataLoaders from the UIEB dataset."""
-    ds_cfg = cfg.get("dataset", {})
     dl_cfg = cfg.get("dataloader", {})
 
-    train_ds = UIEBDataset(
-        root_dir=ds_cfg.get("root_dir"),
-        raw_dir=ds_cfg.get("raw_dir"),
-        reference_dir=ds_cfg.get("reference_dir"),
-        image_size=ds_cfg.get("image_size", 256),
-        augment=True,
+    # The 90/10 split now lives in data/dataset.py::get_splits so that validate.py and
+    # test.py --mode dataset score the SAME held-out 10% and never leak training data.
+    train_dataset, val_dataset = get_splits(cfg)
+
+    logger.info(
+        "Dataset split: %d train / %d validation images (shared get_splits, seed=42)",
+        len(train_dataset), len(val_dataset),
     )
-    val_ds = UIEBDataset(
-        root_dir=ds_cfg.get("root_dir"),
-        raw_dir=ds_cfg.get("raw_dir"),
-        reference_dir=ds_cfg.get("reference_dir"),
-        image_size=ds_cfg.get("image_size", 256),
-        augment=False,
-    )
-
-    train_ratio = dl_cfg.get("train_split", 0.9)
-    n_total = len(train_ds)
-    n_train = int(n_total * train_ratio)
-    n_val = n_total - n_train
-
-    generator = torch.Generator().manual_seed(42)
-    indices = torch.randperm(n_total, generator=generator).tolist()
-    train_indices, val_indices = indices[:n_train], indices[n_train:]
-
-    train_dataset = torch.utils.data.Subset(train_ds, train_indices)
-    val_dataset = torch.utils.data.Subset(val_ds, val_indices)
-
-    logger.info("Dataset split: %d train / %d validation images", n_train, n_val)
 
     pin_memory = dl_cfg.get("pin_memory", True) and torch.cuda.is_available()
 
@@ -303,6 +282,13 @@ def main() -> None:
     es_enabled = es_cfg.get("enabled", True)
     es_patience = es_cfg.get("patience", 20)
     es_min_delta = es_cfg.get("min_delta", 0.01)
+    # early_stopping.metric is now honoured rather than hardcoded to PSNR.
+    es_metric = str(es_cfg.get("metric", "psnr")).lower()
+    if es_metric not in ("psnr", "ssim"):
+        logger.warning("Unsupported early_stopping.metric %r; falling back to 'psnr'.", es_metric)
+        es_metric = "psnr"
+
+    save_every_epochs = train_cfg.get("save_every_epochs", 0) or 0
 
     logger.info(
         "Config: epochs=%d  bs=%d  lr=%.2e  amp=%s  workers=%d  grad_clip=%.1f",
@@ -315,11 +301,9 @@ def main() -> None:
     logger.info("TensorBoard logs -> %s", tb_dir)
 
     # ---- Model ----
-    model_cfg = cfg.get("model", {})
-    model = PFGTUIEModel(
-        embed_dim=model_cfg.get("embed_dim", 128),
-        num_heads=model_cfg.get("num_heads", 1),
-    ).to(device)
+    # Built through the shared helper so train-time and eval-time architecture
+    # can never drift apart (see models/build.py).
+    model = build_model(cfg, device=device)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info("Model parameters: %s", f"{n_params:,}")
@@ -329,6 +313,7 @@ def main() -> None:
         lambda_l1=loss_cfg.get("lambda_l1", 1.0),
         lambda_ssim=loss_cfg.get("lambda_ssim", 0.5),
         lambda_perceptual=loss_cfg.get("lambda_perceptual", 0.1),
+        lambda_frequency=loss_cfg.get("lambda_frequency", 0.1),
     ).to(device)
 
     # ---- Optimizer ----
@@ -356,7 +341,7 @@ def main() -> None:
 
     # ---- Resume ----
     start_epoch = 0
-    best_psnr = 0.0
+    best_metric = 0.0
     es_counter = 0
 
     if args.resume is not None:
@@ -370,10 +355,10 @@ def main() -> None:
         )
         start_epoch = ckpt.get("epoch", 0)
         global_step = ckpt.get("step", 0)
-        best_psnr = ckpt.get("metrics", {}).get("psnr", 0.0)
+        best_metric = ckpt.get("metrics", {}).get(es_metric, 0.0)
         es_counter = ckpt.get("es_counter", 0)
-        logger.info("Resumed from epoch %d (global_step=%d, best_psnr=%.4f, es_counter=%d)",
-                    start_epoch, global_step, best_psnr, es_counter)
+        logger.info("Resumed from epoch %d (global_step=%d, best_%s=%.4f, es_counter=%d)",
+                    start_epoch, global_step, es_metric, best_metric, es_counter)
 
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -385,6 +370,7 @@ def main() -> None:
         running_l1 = 0.0
         running_ssim_loss = 0.0
         running_perc = 0.0
+        running_freq = 0.0
         total_steps_epoch = 0
 
         for step, (inputs, targets) in enumerate(train_loader):
@@ -416,6 +402,7 @@ def main() -> None:
             running_l1 += float(losses["l1_loss"].item())
             running_ssim_loss += float(losses["ssim_loss"].item())
             running_perc += float(losses["perceptual_loss"].item())
+            running_freq += float(losses["frequency_loss"].item())
             total_steps_epoch += 1
             global_step += 1
 
@@ -423,12 +410,13 @@ def main() -> None:
             if global_step % log_every == 0:
                 logger.info(
                     "epoch=%d/%d  step=%d  loss=%.6f  l1=%.6f  ssim=%.6f  "
-                    "perc=%.6f  grad_norm=%.4f  lr=%.2e",
+                    "perc=%.6f  freq=%.6f  grad_norm=%.4f  lr=%.2e",
                     epoch + 1, total_epochs, step + 1,
                     float(total_loss.item()),
                     float(losses["l1_loss"].item()),
                     float(losses["ssim_loss"].item()),
                     float(losses["perceptual_loss"].item()),
+                    float(losses["frequency_loss"].item()),
                     float(grad_norm),
                     current_lr,
                 )
@@ -436,6 +424,7 @@ def main() -> None:
                 writer.add_scalar("train/l1_loss", float(losses["l1_loss"].item()), global_step)
                 writer.add_scalar("train/ssim_loss", float(losses["ssim_loss"].item()), global_step)
                 writer.add_scalar("train/perceptual_loss", float(losses["perceptual_loss"].item()), global_step)
+                writer.add_scalar("train/frequency_loss", float(losses["frequency_loss"].item()), global_step)
                 writer.add_scalar("train/grad_norm", float(grad_norm), global_step)
                 writer.add_scalar("train/lr", current_lr, global_step)
 
@@ -458,6 +447,9 @@ def main() -> None:
 
         # ---- Validation (every val_every epochs) ----
         do_validate = ((epoch + 1) % val_every == 0) or (epoch + 1 == total_epochs)
+        # training.save_every_epochs now actually produces checkpoints/epoch_N.pt
+        # snapshots — extra recovery points for long unattended runs.
+        save_periodic = bool(save_every_epochs) and ((epoch + 1) % save_every_epochs == 0)
         if do_validate:
             val_metrics = run_validation(model, val_loader, criterion, device, use_amp)
             psnr = val_metrics["psnr"]
@@ -473,9 +465,11 @@ def main() -> None:
             writer.add_scalar("val/ssim", ssim, epoch + 1)
 
             # ---- Checkpoint ----
-            is_best = psnr > best_psnr + es_min_delta
+            # Track whichever metric early_stopping.metric names (higher is better).
+            current_metric = val_metrics[es_metric]
+            is_best = current_metric > best_metric + es_min_delta
             if is_best:
-                best_psnr = psnr
+                best_metric = current_metric
                 es_counter = 0
             else:
                 es_counter += 1
@@ -491,6 +485,7 @@ def main() -> None:
                 metrics={**val_metrics, "avg_train_loss": avg_loss},
                 is_best=is_best,
                 es_counter=es_counter,
+                save_periodic=save_periodic,
             )
         else:
             # Save latest checkpoint even when skipping validation
@@ -505,17 +500,19 @@ def main() -> None:
                 metrics={"avg_train_loss": avg_loss},
                 is_best=False,
                 es_counter=es_counter,
+                save_periodic=save_periodic,
             )
 
         # ---- Early stopping ----
         if do_validate and es_enabled and es_counter >= es_patience:
             logger.info(
-                "Early stopping triggered: PSNR did not improve for %d epochs.", es_patience
+                "Early stopping triggered: %s did not improve for %d validation rounds.",
+                es_metric.upper(), es_patience
             )
             break
 
     writer.close()
-    logger.info("Training complete. Best PSNR: %.4f dB", best_psnr)
+    logger.info("Training complete. Best %s: %.4f", es_metric.upper(), best_metric)
     logger.info("Best checkpoint: %s/best.pt", checkpoint_dir)
 
 

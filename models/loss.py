@@ -7,14 +7,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
+from models.wavelet import WaveletTransform
+
 
 class PFGTLoss(nn.Module):
     """Composite loss for the Physics-aware Frequency-Guided Transformer.
 
-    The total objective combines:
+    Implements the objective specified in ``docs/math.md`` section 8:
+
+        L_total = lambda1*L1 + lambda2*L_perceptual + lambda3*L_SSIM + lambda4*L_frequency
+
     - L1 reconstruction loss for pixel-level accuracy
     - SSIM-based structural loss for perceptual consistency
     - Perceptual loss from pretrained VGG19 features for semantic similarity
+    - Frequency loss for wavelet sub-band consistency
+
+    The frequency term was specified in the docs but missing from the implementation.
+    It is computed as the L1 distance between the Haar-DWT sub-bands (LL/LH/HL/HH) of
+    the prediction and the target, reusing ``models/wavelet.py``. Because the model is
+    itself organised around a wavelet decomposition, supervising the sub-bands directly
+    penalises high-frequency (edge/texture) error that a plain pixel L1 tends to average
+    away.
 
     The module returns a dictionary of component losses and the summed total.
     """
@@ -24,6 +37,7 @@ class PFGTLoss(nn.Module):
         lambda_l1: float = 1.0,
         lambda_ssim: float = 0.5,
         lambda_perceptual: float = 0.1,
+        lambda_frequency: float = 0.1,
     ) -> None:
         super().__init__()
 
@@ -33,10 +47,16 @@ class PFGTLoss(nn.Module):
             raise ValueError(f"lambda_ssim must be non-negative, got {lambda_ssim}.")
         if lambda_perceptual < 0:
             raise ValueError(f"lambda_perceptual must be non-negative, got {lambda_perceptual}.")
+        if lambda_frequency < 0:
+            raise ValueError(f"lambda_frequency must be non-negative, got {lambda_frequency}.")
 
         self.lambda_l1 = lambda_l1
         self.lambda_ssim = lambda_ssim
         self.lambda_perceptual = lambda_perceptual
+        self.lambda_frequency = lambda_frequency
+
+        # Reuses the same Haar DWT the model itself is built on.
+        self.wavelet = WaveletTransform(wavelet="haar", level=1)
 
         # Use a pretrained VGG19 feature extractor for perceptual loss.
         # The model is frozen by default to preserve the pretrained semantics.
@@ -62,11 +82,13 @@ class PFGTLoss(nn.Module):
         l1_loss = self._l1_loss(prediction, target)
         ssim_loss = self._ssim_loss(prediction, target)
         perceptual_loss = self._perceptual_loss(prediction, target)
+        frequency_loss = self._frequency_loss(prediction, target)
 
         total_loss = (
             self.lambda_l1 * l1_loss
             + self.lambda_ssim * ssim_loss
             + self.lambda_perceptual * perceptual_loss
+            + self.lambda_frequency * frequency_loss
         )
 
         return {
@@ -74,6 +96,7 @@ class PFGTLoss(nn.Module):
             "l1_loss": l1_loss,
             "ssim_loss": ssim_loss,
             "perceptual_loss": perceptual_loss,
+            "frequency_loss": frequency_loss,
         }
 
     def _l1_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -85,6 +108,25 @@ class PFGTLoss(nn.Module):
         # Compute SSIM over each image independently and optimize the complement.
         ssim_value = self._ssim(prediction, target)
         return 1.0 - ssim_value
+
+    def _frequency_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Wavelet sub-band consistency loss (L_frequency in docs/math.md section 8).
+
+        Decomposes both images with a single-level Haar DWT and takes the mean L1
+        distance across all four sub-bands. The LL term supervises global colour and
+        illumination; LH/HL/HH supervise horizontal, vertical and diagonal detail.
+        """
+        # The DWT is numerically sensitive, so it runs in fp32 even under AMP
+        # (WaveletTransform already disables autocast internally).
+        pred_bands = self.wavelet(prediction.float())
+        with torch.no_grad():
+            target_bands = self.wavelet(target.float())
+
+        band_losses = [
+            F.l1_loss(pred_band, target_band)
+            for pred_band, target_band in zip(pred_bands, target_bands)
+        ]
+        return torch.stack(band_losses).mean()
 
     def _perceptual_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Perceptual loss computed from VGG19 feature activations.

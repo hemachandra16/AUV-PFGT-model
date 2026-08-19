@@ -21,9 +21,9 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from data.dataset import UIEBDataset
+from data.dataset import UIEBDataset, get_splits, subset_pair_names
 from metrics import compute_psnr, compute_ssim, compute_uiqm, compute_uciqe
-from models.model import PFGTUIEModel
+from models.build import build_model
 from utils.checkpoint import load_checkpoint
 from utils.logging_utils import setup_logger
 from utils.seed import seed_everything
@@ -68,6 +68,14 @@ def parse_args() -> argparse.Namespace:
         "--seed", type=int, default=42,
         help="Random seed for reproducibility",
     )
+    parser.add_argument(
+        "--split", type=str, default="val", choices=["val", "train", "full"],
+        help=(
+            "Which split to score. 'val' (default) is the held-out 10%% and is the only "
+            "honest choice for reporting. 'train' and 'full' overlap the training data "
+            "and are for diagnostics only."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -84,7 +92,8 @@ def get_device(device_arg: str) -> torch.device:
 @torch.no_grad()
 def validate(
     model: torch.nn.Module,
-    dataset: UIEBDataset,
+    dataset,
+    pair_names: list[str],
     batch_size: int,
     device: torch.device,
     output_csv: str,
@@ -106,8 +115,6 @@ def validate(
     uiqm_sum = 0.0
     uciqe_sum = 0.0
     n_images = 0
-
-    pair_names = [p[0].name for p in dataset.pairs]
 
     for batch_idx, (inputs, targets) in enumerate(loader):
         inputs = inputs.to(device)
@@ -171,24 +178,45 @@ def main() -> None:
     device = get_device(args.device)
     logger.info("Validating on device: %s", device)
 
-    # Load dataset
-    dataset = UIEBDataset(
+    # Load dataset via the shared, seeded split so evaluation only ever sees held-out
+    # images. Scoring all 890 pairs (the old behaviour) leaked ~801 training images and
+    # is what inflated the previously reported test PSNR.
+    train_subset, val_subset = get_splits(
         raw_dir=args.raw_dir,
         reference_dir=args.reference_dir,
         image_size=args.image_size,
+        augment_train=False,
     )
-    logger.info("Dataset: %d paired images", len(dataset))
+    if args.split == "val":
+        dataset = val_subset
+        pair_names = subset_pair_names(val_subset)
+    elif args.split == "train":
+        dataset = train_subset
+        pair_names = subset_pair_names(train_subset)
+    else:  # full — diagnostics only, overlaps training data
+        dataset = UIEBDataset(
+            raw_dir=args.raw_dir,
+            reference_dir=args.reference_dir,
+            image_size=args.image_size,
+        )
+        pair_names = [p[0].name for p in dataset.pairs]
+        logger.warning(
+            "--split full scores TRAINING IMAGES TOO. These numbers are not held-out "
+            "and must not be reported as test results."
+        )
+    logger.info("Evaluating split '%s': %d images", args.split, len(dataset))
 
     # Load model
-    model = PFGTUIEModel().to(device)
+    model = build_model(device=device)
     load_checkpoint(args.checkpoint, model=model, device=device)
     logger.info("Checkpoint loaded: %s", args.checkpoint)
 
     # Run validation
-    logger.info("Running validation on %d images...", len(dataset))
+    logger.info("Running validation on %d images (split=%s)...", len(dataset), args.split)
     metrics = validate(
         model=model,
         dataset=dataset,
+        pair_names=pair_names,
         batch_size=args.batch_size,
         device=device,
         output_csv=args.output_csv,
@@ -197,7 +225,7 @@ def main() -> None:
     # Report
     logger.info("")
     logger.info("=" * 50)
-    logger.info("  VALIDATION RESULTS  (%d images)", metrics["n_images"])
+    logger.info("  VALIDATION RESULTS  (split=%s, %d images)", args.split, metrics["n_images"])
     logger.info("=" * 50)
     logger.info("  PSNR  : %.4f dB", metrics["psnr"])
     logger.info("  SSIM  : %.4f", metrics["ssim"])

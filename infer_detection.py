@@ -14,7 +14,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from models.model import PFGTUIEModel
+from models.build import build_model
 from models.object_detection import UnderwaterObjectDetector, annotate_image_with_detections
 from utils.checkpoint import load_checkpoint
 from utils.logging_utils import setup_logger
@@ -106,7 +106,7 @@ def main() -> None:
     logger.info("Running native detection inference on device: %s", device)
 
     # Load Enhancement Model
-    enhancer = PFGTUIEModel().to(device)
+    enhancer = build_model(device=device)
     load_checkpoint(args.checkpoint, model=enhancer, device=device)
     enhancer.eval()
 

@@ -1,9 +1,9 @@
 import torch
-from models.model import PFGTUIEModel
+from models.build import build_model
 
 def run_smoke_test():
     print("Initializing model...")
-    model = PFGTUIEModel().cuda()
+    model = build_model(device="cuda")
     print("Model moved to GPU.")
     
     print("Creating dummy input...")

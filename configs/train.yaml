@@ -23,10 +23,13 @@ model:
   num_heads: 4
 
 # ---- Loss weights ------------------------------------------
+# L_total = lambda_l1*L1 + lambda_perceptual*L_perc + lambda_ssim*L_SSIM
+#           + lambda_frequency*L_freq        (docs/math.md section 8)
 loss:
   lambda_l1: 1.0
   lambda_ssim: 0.5
   lambda_perceptual: 0.1
+  lambda_frequency: 0.15       # Haar-DWT sub-band L1; was specified in docs but unimplemented
 
 # ---- Optimizer ---------------------------------------------
 optimizer:
@@ -37,8 +40,9 @@ optimizer:
 # ---- LR Schedule -------------------------------------------
 scheduler:
   warmup_epochs: 5             # linear warm-up from lr/10 to lr
-  total_epochs: 150
   eta_min: 1.0e-6              # cosine annealing floor
+  # NOTE: `total_epochs` was removed here — it was never read; the schedule length
+  # comes from `training.epochs` below.
 
 # ---- Training ----------------------------------------------
 training:
@@ -47,13 +51,13 @@ training:
   amp: true                    # Automatic Mixed Precision
   grad_clip_norm: 1.0          # max gradient norm
   log_every_steps: 10          # print/TensorBoard every N steps
-  save_every_epochs: 10        # save periodic checkpoints
+  save_every_epochs: 10        # save checkpoints/epoch_N.pt every N epochs (extra recovery points)
 
 # ---- Early Stopping ----------------------------------------
 early_stopping:
   enabled: true
-  patience: 20                 # epochs without val loss improvement
-  metric: "psnr"               # metric to monitor (higher = better)
+  patience: 20                 # validation rounds without improvement before stopping
+  metric: "psnr"               # monitored metric; "psnr" or "ssim" (higher = better)
   min_delta: 0.01              # minimum improvement to reset patience
 
 # ---- Checkpoints -------------------------------------------
