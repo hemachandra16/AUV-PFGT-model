@@ -174,3 +174,39 @@ step 1900 against a 6500-step total puts it correctly at 24% of the schedule
 No progress was discarded. Cost: a model trained 65 epochs rather than 150.
 This is a compute-budget limitation, not a convergence result — stated as such in
 FINAL_REPORT.md.
+
+### D-010 — UCIQE metric was broken (audit said it was fine; it was not)  [AUDIT CORRECTION]
+The prior audit listed the PSNR/SSIM/UIQM/UCIQE implementations under "Confirmed NOT
+broken". Verifying anyway (as instructed) turned up two genuine bugs in
+`metrics/uciqe.py`. The first leak-free `validate.py` run reported:
+
+```
+UCIQE : 17128886.2888        <- should be roughly 0.2 - 0.7
+```
+
+Root causes:
+1. **`a`/`b` never re-centred.** OpenCV's 8-bit LAB stores a and b offset by +128, so a
+   neutral grey pixel is (128, 128), not (0, 0). `sqrt(a^2 + b^2)` therefore scored a
+   colourless pixel as maximally chromatic. Measured on a real UIEB reference image:
+   mean chroma 166.1 uncentred vs 21.5 centred — a 7.7x inflation of the sigma_c term.
+2. **Division by luminance with no guard.** `saturation = chroma / (L + 1e-10)`, and
+   OpenCV's L hits exactly 0 on black pixels, giving saturation ~1.8e12. A fully black
+   frame scored **4.66e11**. Any image with pure-black pixels poisoned the average.
+
+Fix: normalise L to [0,1], re-centre a,b to [-0.5,0.5], and use the bounded saturation
+form `chroma / sqrt(chroma^2 + L^2)`, which is in [0,1] by construction.
+
+Verified after the fix:
+```
+reference image UCIQE: 0.2936     raw (degraded) image UCIQE: 0.2750
+all-black: 0.0  (was 4.66e11)     all-white: 0.0     random noise: 0.3583
+```
+Reference scoring above raw is the expected direction. **Any previously reported UCIQE
+number for this project is meaningless**; all UCIQE figures in FINAL_REPORT.md are
+recomputed with the fixed metric for both the baseline and the retrained model.
+
+NOTE on UIQM: it reports ~10.1-10.4, which is high versus the ~2-5 commonly quoted for
+UIEB. I did **not** change it — unlike UCIQE it is not numerically broken (no blow-up, no
+degenerate values), and the discrepancy looks like a coefficient/scaling convention
+difference between UIQM variants. Flagged for the user rather than silently altered,
+since changing it would break comparability with previously logged runs.
