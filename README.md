@@ -152,8 +152,21 @@ python infer.py --input path/to/underwater.png --output path/to/enhanced.png
 # Folder inference
 python infer.py --input path/to/raw_folder/ --output-dir path/to/results/
 
-# GPU batch inference
-python infer.py --input path/to/raw_folder/ --batch-size 8 --device cuda
+# Force a device (default is "auto")
+python infer.py --input path/to/raw_folder/ --output-dir path/to/results/ --device cuda
+```
+
+> `infer.py` runs at native resolution, one image at a time (padding to a multiple of
+> 16 for the wavelet transform, then cropping back). It has no `--batch-size` flag.
+
+### Enhancement + object detection
+
+```bash
+# Enhance, then detect with the RUOD fine-tuned underwater detector
+python infer_detection.py --input path/to/raw_folder/ --output-dir outputs/detection
+
+# Compare against the legacy COCO Faster R-CNN path
+python infer_detection.py --input path/to/img.png --detector fasterrcnn
 ```
 
 ---
@@ -165,11 +178,12 @@ PhysicsFreqTransformer/
 ├── configs/
 │   └── train.yaml              ← All training hyperparameters
 ├── data/
-│   └── dataset.py              ← UIEBDataset + DataLoader factory
+│   └── dataset.py              ← UIEBDataset + get_splits() (shared seeded 90/10 split)
 ├── datasets/
-│   └── UIEB/
-│       ├── raw-890/
-│       └── reference-890/
+│   ├── UIEB/                   ← Enhancement pairs
+│   │   ├── raw-890/
+│   │   └── reference-890/
+│   └── RUOD_yolo/              ← Underwater detection dataset (YOLO format)
 ├── docs/
 │   ├── architecture.md
 │   ├── blueprint.md
@@ -186,7 +200,9 @@ PhysicsFreqTransformer/
 │   │   └── physics_attention.py  ← Physics-Guided Attention (core novelty)
 │   ├── fusion.py               ← Cross-frequency feature fusion
 │   ├── inverse_wavelet.py      ← Inverse Haar DWT reconstruction
-│   ├── loss.py                 ← L1 + SSIM + Perceptual (VGG19) loss
+│   ├── build.py                ← build_model(): the ONLY model constructor
+│   ├── loss.py                 ← L1 + SSIM + Perceptual (VGG19) + Frequency loss
+│   ├── object_detection.py     ← RUOD fine-tuned YOLO detector (+ legacy COCO path)
 │   ├── model.py                ← Full PFGT-UIE pipeline
 │   ├── physics_encoder.py      ← Physics Prior Encoder (CNN)
 │   ├── refinement.py           ← Image Refinement Head
@@ -204,7 +220,14 @@ PhysicsFreqTransformer/
 ├── validate.py                 ← Validation script
 ├── evaluate.py                 ← Evaluation entry-point
 ├── test.py                     ← Test script (single/folder/dataset)
-├── infer.py                    ← Inference script (CPU/CUDA/batch)
+├── infer.py                    ← Native-resolution inference (one image at a time)
+├── infer_detection.py          ← Enhancement + underwater object detection
+├── tools/
+│   ├── verify_attention.py     ← Proves the physics-guided attention actually works
+│   ├── compare_before_after.py ← Pre-fix vs post-fix image/metric comparison
+│   ├── fetch_ruod.py           ← Download the RUOD detection dataset
+│   ├── ruod_to_yolo.py         ← COCO -> YOLO conversion for RUOD
+│   └── train_detector.py       ← Fine-tune the underwater YOLO detector
 └── requirements.txt
 ```
 
@@ -217,15 +240,19 @@ All hyperparameters live in [`configs/train.yaml`](configs/train.yaml):
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `training.epochs` | 150 | Total training epochs |
-| `dataloader.batch_size` | 4 | Training batch size |
-| `optimizer.lr` | 1e-4 | AdamW learning rate |
+| `dataloader.batch_size` | 8 | Training batch size (peaks ~5.2 GB VRAM at 256x256) |
+| `model.num_heads` | 4 | Attention heads (all scripts read this via `models/build.py`) |
+| `optimizer.lr` | 2e-4 | AdamW learning rate |
 | `scheduler.warmup_epochs` | 5 | Linear warmup duration |
 | `training.amp` | true | Automatic Mixed Precision |
 | `training.grad_clip_norm` | 1.0 | Max gradient norm |
 | `loss.lambda_l1` | 1.0 | L1 loss weight |
 | `loss.lambda_ssim` | 0.5 | SSIM loss weight |
 | `loss.lambda_perceptual` | 0.1 | Perceptual (VGG19) loss weight |
-| `early_stopping.patience` | 20 | Epochs without improvement |
+| `loss.lambda_frequency` | 0.15 | Haar-DWT sub-band consistency loss weight |
+| `early_stopping.metric` | psnr | Monitored metric (`psnr` or `ssim`) |
+| `early_stopping.patience` | 20 | Validation rounds without improvement |
+| `training.save_every_epochs` | 10 | Also write `checkpoints/epoch_N.pt` snapshots |
 
 ---
 
