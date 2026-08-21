@@ -440,3 +440,28 @@ override, so `train.py` keeps the 150-epoch total from the config and its LR sta
 original warmup+cosine curve (`global_step / total_steps`) rather than restarting the
 schedule — the mistake session 1's D-009 warned about. Safety valve: 25 restarts max, with
 escalating backoff if a restart dies inside its grace period.
+
+### S2-D-003 — a hot-swap left TWO watchdogs running; caught by a process census
+While adding a heartbeat I restarted the watchdog. The `terminate()` did not take on the
+old instance, and a census found two live:
+```
+real trainers : [(7320, '2033MB')]
+real watchdogs: [(10700, '21MB'), (19736, '21MB')]
+WARNING: expected exactly 1 watchdog
+```
+Two watchdogs is **worse than none**: on a crash both would restart training, producing two
+concurrent runs fighting over the same GPU and the same `checkpoints/latest.pt`. Killed the
+older (10700) by create-time and confirmed `CLEAN: 1 trainer, 1 watchdog`.
+
+Two things came out of it:
+* `tools/_proccheck.py` — a read-only census that exits non-zero unless exactly one real
+  trainer and one real watchdog are alive. Used at every check-in from here on.
+* A **singleton guard** in `tools/watchdog.py`: a second instance now refuses to start.
+  Verified: `ABORT: another watchdog is already running (pids [19736]).`
+  Note the currently-running instance (19736) was started *before* the guard was added, so
+  the guard protects future launches, not this one — the census is what protects tonight.
+
+Also fixed a bad monitoring habit: `ps -W` on this machine prints only the executable path,
+**not the arguments**, so `ps -W | grep watchdog.py` never matches and any wait-loop built
+on it exits instantly (my first completion waiter did exactly that, firing at epoch 19 of
+150). All process checks now go through psutil, which sees full command lines.

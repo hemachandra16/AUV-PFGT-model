@@ -217,6 +217,15 @@ def kill_tree(pid: int) -> None:
     log(f"   killed process tree rooted at pid={pid} ({len(procs)} procs)")
 
 
+def last_epoch_seen() -> str:
+    """Most recent 'Epoch N/M finished' marker in the training log."""
+    for line in reversed(last_lines(TRAIN_LOG, 400)):
+        m = re.search(r"Epoch (\d+)/(\d+) finished", line)
+        if m:
+            return f"{m.group(1)}/{m.group(2)}"
+    return "?"
+
+
 def log_mtime_size() -> tuple:
     """(mtime, size) of the training log — used to detect a stalled run."""
     if not TRAIN_LOG.exists():
@@ -243,9 +252,34 @@ def main() -> None:
                     help="Safety valve against an unrecoverable crash-loop")
     ap.add_argument("--grace", type=int, default=90,
                     help="Seconds to wait after a restart before judging health again")
+    ap.add_argument("--heartbeat", type=int, default=600,
+                    help="Log an [ok] line at most this often while healthy")
     ap.add_argument("--stall-timeout", type=int, default=900,
                     help="Restart if the log stays silent this long while the process lives")
     args = ap.parse_args()
+
+    # Singleton guard. Two watchdogs would BOTH restart training after a crash, producing
+    # two concurrent runs competing for the same GPU and checkpoint files -- strictly worse
+    # than having no watchdog. (Learned the hard way: a terminate() during a hot-swap did
+    # not take, and two instances ran until a process census caught it.)
+    try:
+        import psutil
+        mine = os.getpid()
+        others = []
+        for proc in psutil.process_iter(["pid", "cmdline", "memory_info"]):
+            if proc.info["pid"] == mine:
+                continue
+            cl = " ".join(str(c) for c in (proc.info.get("cmdline") or []))
+            mi = proc.info.get("memory_info")
+            rss = mi.rss if mi else 0
+            if re.search(r"[\/ ]watchdog\.py(\s|$)", cl) and rss > 15 * 1024 * 1024:
+                others.append(proc.info["pid"])
+        if others:
+            print(f"ABORT: another watchdog is already running (pids {others}). "
+                  f"Refusing to start a second one.")
+            sys.exit(2)
+    except ImportError:
+        pass
 
     log("=" * 70)
     log(f"watchdog starting (interval={args.interval}s, max_restarts={args.max_restarts})")
@@ -256,6 +290,7 @@ def main() -> None:
     consecutive_fast_failures = 0
     last_log_sig = log_mtime_size()
     last_progress_at = time.time()
+    last_heartbeat = 0.0
 
     while True:
         done = log_says_done()
@@ -276,6 +311,12 @@ def main() -> None:
             if sig != last_log_sig:
                 last_log_sig = sig
                 last_progress_at = time.time()
+                # Periodic heartbeat: without it, a wedged watchdog and a healthy one look
+                # identical in the log. Includes the epoch so progress is visible too.
+                if time.time() - last_heartbeat >= args.heartbeat:
+                    ep = last_epoch_seen()
+                    log(f"[ok] training pid={pid} alive, epoch={ep}, restarts={restarts}")
+                    last_heartbeat = time.time()
             elif time.time() - last_progress_at > args.stall_timeout:
                 silent = int(time.time() - last_progress_at)
                 log(f"!! STALL: pid={pid} alive but logs/train.log silent for {silent}s")
