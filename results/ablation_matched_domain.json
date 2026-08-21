@@ -1,0 +1,63 @@
+{
+  "question": "With the detector trained on the SAME domain it is tested on, does PFGT-UIE enhancement help underwater detection?",
+  "design": "Identical budget both arms: same N, epochs, imgsz, batch, seed. Only the image domain differs.",
+  "n_train": 3000,
+  "n_val": 4200,
+  "epochs": 20,
+  "imgsz": 640,
+  "batch": 16,
+  "raw_arm": {
+    "arm": "raw",
+    "weights": "D:\\PhysicsFreqTransformer\\runs\\ablation\\matched_raw\\weights\\best.pt",
+    "mAP50": 0.5025,
+    "mAP50_95": 0.2916,
+    "precision": 0.564,
+    "recall": 0.4731,
+    "per_class_AP50": {
+      "holothurian": 0.6928,
+      "echinus": 0.857,
+      "scallop": 0.7079,
+      "starfish": 0.8582,
+      "fish": 0.2923,
+      "corals": 0.0704,
+      "diver": 0.5928,
+      "cuttlefish": 0.0,
+      "turtle": 0.5748,
+      "jellyfish": 0.3786
+    }
+  },
+  "enhanced_arm": {
+    "arm": "enhanced",
+    "weights": "D:\\PhysicsFreqTransformer\\runs\\ablation\\matched_enhanced\\weights\\best.pt",
+    "mAP50": 0.4845,
+    "mAP50_95": 0.2778,
+    "precision": 0.5449,
+    "recall": 0.4714,
+    "per_class_AP50": {
+      "holothurian": 0.6909,
+      "echinus": 0.794,
+      "scallop": 0.6761,
+      "starfish": 0.8488,
+      "fish": 0.3143,
+      "corals": 0.0528,
+      "diver": 0.5454,
+      "cuttlefish": 0.0,
+      "turtle": 0.5747,
+      "jellyfish": 0.3479
+    }
+  },
+  "delta_mAP50": -0.018,
+  "delta_mAP50_95": -0.0138,
+  "per_class_delta_AP50": {
+    "holothurian": -0.0019,
+    "echinus": -0.063,
+    "scallop": -0.0318,
+    "starfish": -0.0094,
+    "fish": 0.022,
+    "corals": -0.0176,
+    "diver": -0.0474,
+    "cuttlefish": 0.0,
+    "turtle": -0.0001,
+    "jellyfish": -0.0307
+  }
+}

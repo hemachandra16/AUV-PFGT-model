@@ -1,0 +1,121 @@
+{
+  "question": "Does PFGT-UIE enhancement help the RUOD detector that was fine-tuned on RAW images?",
+  "images": 4200,
+  "enhancer_checkpoint": "checkpoints/best.pt",
+  "detector_checkpoint": "checkpoints/detector/best.pt",
+  "imgsz": 640,
+  "max_side_before_enhancement": 1280,
+  "raw": {
+    "condition": "raw",
+    "mAP50": 0.8292,
+    "mAP50_95": 0.5845,
+    "precision": 0.8385,
+    "recall": 0.7561,
+    "per_class": {
+      "holothurian": {
+        "AP50": 0.751,
+        "AP50_95": 0.4443
+      },
+      "echinus": {
+        "AP50": 0.8799,
+        "AP50_95": 0.4932
+      },
+      "scallop": {
+        "AP50": 0.7143,
+        "AP50_95": 0.4254
+      },
+      "starfish": {
+        "AP50": 0.8619,
+        "AP50_95": 0.5176
+      },
+      "fish": {
+        "AP50": 0.7459,
+        "AP50_95": 0.5
+      },
+      "corals": {
+        "AP50": 0.6935,
+        "AP50_95": 0.4968
+      },
+      "diver": {
+        "AP50": 0.9286,
+        "AP50_95": 0.7154
+      },
+      "cuttlefish": {
+        "AP50": 0.9653,
+        "AP50_95": 0.8176
+      },
+      "turtle": {
+        "AP50": 0.9648,
+        "AP50_95": 0.8263
+      },
+      "jellyfish": {
+        "AP50": 0.7867,
+        "AP50_95": 0.6081
+      }
+    }
+  },
+  "enhanced": {
+    "condition": "enhanced",
+    "mAP50": 0.7906,
+    "mAP50_95": 0.547,
+    "precision": 0.8136,
+    "recall": 0.7164,
+    "per_class": {
+      "holothurian": {
+        "AP50": 0.6733,
+        "AP50_95": 0.3867
+      },
+      "echinus": {
+        "AP50": 0.7946,
+        "AP50_95": 0.383
+      },
+      "scallop": {
+        "AP50": 0.627,
+        "AP50_95": 0.3688
+      },
+      "starfish": {
+        "AP50": 0.7674,
+        "AP50_95": 0.4373
+      },
+      "fish": {
+        "AP50": 0.7378,
+        "AP50_95": 0.4929
+      },
+      "corals": {
+        "AP50": 0.6777,
+        "AP50_95": 0.4836
+      },
+      "diver": {
+        "AP50": 0.9197,
+        "AP50_95": 0.6985
+      },
+      "cuttlefish": {
+        "AP50": 0.9622,
+        "AP50_95": 0.809
+      },
+      "turtle": {
+        "AP50": 0.9589,
+        "AP50_95": 0.8097
+      },
+      "jellyfish": {
+        "AP50": 0.7876,
+        "AP50_95": 0.6007
+      }
+    }
+  },
+  "delta_mAP50": -0.0386,
+  "delta_mAP50_95": -0.0375,
+  "per_class_delta_AP50": {
+    "holothurian": -0.0777,
+    "echinus": -0.0853,
+    "scallop": -0.0873,
+    "starfish": -0.0945,
+    "fish": -0.0081,
+    "corals": -0.0158,
+    "diver": -0.0089,
+    "cuttlefish": -0.0031,
+    "turtle": -0.0059,
+    "jellyfish": 0.0009
+  },
+  "caveat": "The detector was fine-tuned on RAW RUOD frames, so evaluating it on enhanced frames introduces a train/test domain shift. A drop here means the CURRENTLY WIRED enhance-then-detect pipeline hurts; it does NOT by itself prove enhancement is unhelpful for detection in general. The matched-domain test is to fine-tune on enhanced frames."
+}

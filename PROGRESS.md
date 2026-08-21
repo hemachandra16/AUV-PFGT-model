@@ -537,3 +537,79 @@ on UIEB.** The enhancement network has several other learnable colour-remapping 
 (physics encoder convs, 1x1 band projections, fusion block, refinement head) that were
 evidently already carrying that work. The fix is a correctness and honesty issue — the
 paper's central claim now describes what the code does — not a metrics win.
+
+## PHASE 4 (BONUS / EXPLORATORY) — does enhancement help downstream detection?
+Chose option A from the brief (the detection ablation), not the TransformerBlock stacking.
+Marked exploratory and kept separate from the Phase 3 headline result.
+
+The experiment ran in three parts, because the first result was confounded and the second
+test of that confound failed.
+
+### Part 1 — the deployed pipeline (full 4,200-image val set)
+`infer_detection.py` runs `raw -> enhance -> detect`, but the detector was fine-tuned on
+**raw** RUOD. So: feed the same detector raw frames vs PFGT-UIE-enhanced frames.
+
+```
+raw      : mAP50 0.8292   mAP50-95 0.5845
+enhanced : mAP50 0.7906   mAP50-95 0.5470
+delta    : mAP50 -0.0386  mAP50-95 -0.0375
+```
+Harness self-check: the raw arm reproduces the detector's own training-time
+`mAP50 = 0.8292` exactly, so the evaluation path is wired correctly.
+
+Per-class AP50 delta was strikingly uneven — small benthic classes collapsed while large
+distinctive ones barely moved:
+```
+jellyfish +0.0009  cuttlefish -0.0031  turtle -0.0059  fish -0.0081  diver -0.0089
+corals -0.0158  holothurian -0.0777  echinus -0.0853  scallop -0.0873  starfish -0.0945
+```
+
+### Part 2 — my texture hypothesis, tested and FALSIFIED
+The obvious reading was that enhancement smooths away the fine texture small seafloor
+objects depend on. I measured it over 300 paired frames instead of asserting it:
+
+| metric | raw | enhanced | change |
+|---|---|---|---|
+| Laplacian variance | 281.6 | 332.5 | **+18.1%** |
+| high-pass energy | 74.17 | 103.24 | **+39.2%** |
+| global contrast (std) | 37.95 | 53.05 | **+39.8%** |
+
+Enhanced frames are **sharper and higher-contrast**, not blurrier (only 30% of images lost
+Laplacian variance). The hypothesis was wrong, and the remaining explanation was domain
+shift — which made the matched-domain test decisive rather than optional.
+
+### Part 3 — matched-domain test (equal budget, only the domain differs)
+Fine-tuned YOLO11n twice from scratch: 3,000 train frames, 20 epochs, same seed, batch and
+imgsz — one arm on raw, one on enhanced, each evaluated on its **own** domain.
+
+```
+raw arm      : mAP50 0.5025   mAP50-95 0.2916
+enhanced arm : mAP50 0.4845   mAP50-95 0.2778
+delta        : mAP50 -0.0180  mAP50-95 -0.0138
+```
+
+### Finding
+**PFGT-UIE enhancement does not help underwater detection on RUOD — it hurts, in both
+conditions.** Decomposing the deployed pipeline's 3.9-point loss:
+
+| Component | mAP50 |
+|---|---|
+| Deployed pipeline loss (raw-trained detector, enhanced input) | −0.0386 |
+| ...of which is train/test **domain shift** (recoverable by retraining) | ≈ −0.0206 |
+| ...of which is a **genuine residual cost** even when matched | **−0.0180** |
+
+So roughly half the damage is a wiring problem the user can fix today by retraining the
+detector on enhanced frames — and the other half is intrinsic: enhancement makes frames
+look better to a human, and measurably raises contrast and high-frequency energy, but adds
+no information the detector can use, while perturbing cues it had calibrated on.
+
+**Immediately actionable:** the repo's current `enhance -> detect` default costs ~3.9 mAP50
+points. Detect on raw frames and use enhancement for human review, or retrain the detector
+on enhanced frames to recover about half of it.
+
+### Caveat on Part 3
+The matched arms used 3,000 images / 20 epochs, so both sit near mAP50 ≈ 0.50 rather than
+the full detector's 0.829. The *comparison* is controlled (identical budgets, one variable),
+but the conclusion is demonstrated at a lower operating point and may not transfer exactly
+to the full-data regime. Repeating it at 9,800 images would settle that; it was not run
+tonight to keep the report inside the session budget.
