@@ -302,3 +302,67 @@ advisor's actual ask and had no results yet. Resumed from epoch 25 with `--epoch
 horizon, then hand the GPU to detector fine-tuning. Sequencing detection *after* a
 shortened enhancement run (rather than before) keeps a converged enhancement checkpoint
 while still guaranteeing the detection deliverable lands.
+
+---
+---
+
+# SESSION 2 — 2026-08-20 (evening) — Fair-Comparison Retrain + Autonomous Watchdog
+
+**Session start:** ~21:30 local, unattended (bypass-permissions).
+**Goal:** give the fixed architecture a genuinely fair, full-length training run (the
+50-epoch result from session 1 was time-boxed, not converged), with automatic crash
+recovery so nothing stops it finishing.
+
+Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked / worked around
+
+## PHASE 0 — Verify state, fix GPU throttle, back up
+- [x] 0.1 `git log` confirms 12 commits, HEAD = `e626cac`
+- [!] 0.2 **`PROGRESS.md` was missing from disk** — `git status` showed ` D PROGRESS.md`. Restored intact from HEAD (304 lines) with `git checkout -- PROGRESS.md`. Only that one file was affected; everything else was clean. Cause unknown (deleted between sessions). Session 1's history is preserved and tonight is appended below it, as instructed.
+- [x] 0.3 Backed up the 50-epoch post-fix run to `checkpoints/_50epoch_postfix_backup/` — md5 verified (`best.pt` = `49444aace20caca676a04f0d87129c18`, `latest.pt` = `7ed24e40b1beaef47967ffcf037fbe1a`)
+- [x] 0.4 Archived session 1's log to `logs/train_50epoch_run.log` (721 lines) so tonight starts a clean `logs/train.log`
+- [x] 0.5 **GPU power throttle FIXED** — see S2-D-001 below
+- [x] 0.6 Env sanity: `torch 2.12.1+cu126  True  NVIDIA GeForce RTX 4060 Laptop GPU`
+- [x] 0.7 Commit
+
+### S2-D-001 — GPU throttle fix: what worked, and the measurement that proves it
+Session 1 declined to change system power settings unattended; tonight's brief explicitly
+authorised it, so I did.
+
+`powercfg /setactive SCHEME_MIN` could not work as written: **only the Balanced scheme
+existed** on this machine (Windows 11 hides the legacy High Performance scheme), and the
+shell is **not elevated**. What worked, without admin:
+
+```
+powercfg /duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c   -> created 5670f263-...  (High performance)
+powercfg /setactive       5670f263-ce63-477a-91c0-522d01182f6d   -> exit 0
+powercfg /getactivescheme -> Power Scheme GUID: 5670f263-...  (High performance)
+```
+(`powercfg /overlaysetactive OVERLAY_SCHEME_MAX` returned exit 0 but this build does not
+support `/getactiveoverlayscheme`, so its effect could not be confirmed independently.)
+
+**Measured, not assumed** — `tools/gpu_power_probe.py` runs 150 s of *real* PFGT-UIE
+training steps (the cap only engaged under sustained load last night, so a short burst
+would have proved nothing) and samples nvidia-smi throughout:
+
+| | Session 1 (Balanced) | Tonight (High performance) | Change |
+|---|---|---|---|
+| Power draw | 19.46 W | **79.36 W** | **4.1x** |
+| SM clock | 585 MHz (18.8% of max) | **2514 MHz (81.0% of max)** | **4.3x** |
+| Measured epoch time | ~146 s | **~50 s** | **2.9x faster** |
+| Temperature | 52 C | 47 -> 77 C over 150 s | runs hot, as expected |
+
+**Important subtlety — `SwPowerCap` is still reported, and that is correct.** The flag was
+active in 13/14 steady-state samples even after the fix. It does not mean "throttled"; it
+means "currently limited by the power budget", which is the normal state of any GPU running
+flat out at its board TDP. At 79 W the card is sitting at ~103% of its 77 W limit, i.e. at
+full power — versus 19 W (25%) last night. **The flag alone is not the signal; the magnitude
+is.** My probe's first verdict heuristic got this wrong (it required the flag to be absent)
+and reported "STILL THROTTLED" against its own data showing a 4x improvement; I corrected
+the logic in `tools/gpu_power_probe.py` rather than trusting the wrong label.
+
+Budget consequence: **150 epochs x ~57 s (incl. validation) ~= 2.4 hours**, comfortably
+inside tonight's window. Session 1's throttled estimate for the same run was 6.1 hours.
+
+Watch item for the watchdog: the die reached 77 C within 150 s. If sustained training
+drives it to the thermal limit, `SwThermalSlowdown` / `HwThermalSlowdown` would appear and
+clocks would fall. The probe now warns on those bits specifically.
