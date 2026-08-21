@@ -613,3 +613,18 @@ the full detector's 0.829. The *comparison* is controlled (identical budgets, on
 but the conclusion is demonstrated at a lower operating point and may not transfer exactly
 to the full-data regime. Repeating it at 9,800 images would settle that; it was not run
 tonight to keep the report inside the session budget.
+
+## PHASE 5 — Report
+- [x] 5.1 `FINAL_REPORT_150EPOCH.md` written (session 1's `FINAL_REPORT.md` untouched, linked for prior context)
+
+### Session 2 summary
+| | |
+|---|---|
+| GPU throttle | FIXED — 19.46 W -> 79.36 W, 146 s/epoch -> 50 s/epoch (2.9x) |
+| Training | 101 epochs, clean early stop at a converged optimum, best @ epoch 81 |
+| Watchdog | **0 restarts, 0 incidents** — never needed to intervene |
+| Fair comparison | post-fix **24.902 dB** vs pre-fix baseline **25.114 dB** -> the fix does NOT pay off |
+| Bonus ablation | enhancement **hurts** detection: -0.0386 mAP50 deployed, -0.0180 matched-domain |
+| Hypotheses falsified tonight | "more epochs will close the gap"; "enhancement blurs away texture" |
+
+Machine left running and idle, as instructed — nothing shut down or slept.
