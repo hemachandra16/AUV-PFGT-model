@@ -628,3 +628,39 @@ tonight to keep the report inside the session budget.
 | Hypotheses falsified tonight | "more epochs will close the gap"; "enhancement blurs away texture" |
 
 Machine left running and idle, as instructed — nothing shut down or slept.
+
+---
+---
+
+# SESSION 3 — 2026-08-21 (evening) — Architecture Design Review + One Informed Run
+
+**Premise:** this code was originally assembled from pasted LLM output, not engineered
+module-by-module. Sessions 1-2 found the one defect with a visible symptom (attention had no
+Q/K/V) and then ran empirical experiments around whatever else was there. This session
+reviews the *rest* of the architecture on design merit before spending more GPU time.
+
+## PHASE 0 — Fix the detection default (free win)
+- [x] 0.1 `infer_detection.py` now detects on **raw** frames by default
+- [x] 0.2 Verified with `tools/verify_detection_default.py` — both checks PASS
+- [x] 0.3 Commit
+
+Session 2 measured that the deployed `enhance -> detect` path costs 3.9 mAP@0.5
+(0.8292 -> 0.7906) because the detector was fine-tuned on raw RUOD frames. The script was
+paying that on every call. The fix separates the two consumers, which want different images:
+
+* `--detect-on raw` (**new default**) — the detector gets the distribution it was trained on.
+* `--annotate-on enhanced` (default) — the human still gets the readable, colour-corrected
+  picture to look at.
+* `--no-enhance` — skip enhancement entirely (fastest path).
+
+Evidence (`tools/verify_detection_default.py`):
+```
+images tested                              : 12
+raw vs enhanced detections genuinely differ: 12/12     <- the two paths are not equivalent
+DEFAULT path matches RAW detections        : 12/12
+DEFAULT path matches ENHANCED detections   : 0/12
+--detect-on enhanced matches ENHANCED      : 12/12     <- old behaviour still reachable
+detector on RAW RUOD val : mAP@0.5 = 0.8292            <- vs 0.7906 enhanced
+```
+The first line matters: it rules out the possibility that the check passes trivially because
+both paths happen to produce identical detections.
