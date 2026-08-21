@@ -664,3 +664,240 @@ detector on RAW RUOD val : mAP@0.5 = 0.8292            <- vs 0.7906 enhanced
 ```
 The first line matters: it rules out the possibility that the check passes trivially because
 both paths happen to produce identical detections.
+
+## PHASE 1 — Design review of the remaining modules
+
+Method: I read every module myself, then ran an independent parallel review (6 module critics
++ literature + completeness critic) to avoid anchoring on my own reading, and **measured**
+every load-bearing claim rather than asserting it. Two of my own hypotheses were falsified by
+those measurements — recorded below, because ruling things out is part of the result.
+
+### Summary table
+
+| Module | Verdict | Headline |
+|---|---|---|
+| `physics_encoder.py` | **actually-wrong** | No physics in it. Structurally cannot compute the global statistics that matter. |
+| `model.py` (capacity split) | **actually-wrong** | 65% of parameters serve 2.7% of the error. |
+| `transformer_block.py` | **weak-but-not-broken** | Exactly permutation-equivariant — no notion of position or locality. |
+| `loss.py` (`L_frequency`) | **weak-but-not-broken** | 99.97% correlated with L1. It is a duplicate term. |
+| `fusion.py` | see below | Concat + 1x1 conv, unconditioned on the physics signal. |
+| `refinement.py` | see below | 4.8% of parameters for the stage that must fix a colour error. |
+| InstanceNorm erasing the cast | **fine** (falsified) | Tested. It does not. |
+| P reaching both branches | **fine** | README's claim holds. |
+
+---
+
+### F1 — Capacity is allocated backwards  [HIGH · strongest evidence in this review]
+
+`tools/_errordecomp.py` decomposes the trained model's remaining held-out error into wavelet
+bands and compares against where the parameters actually are:
+
+```
+band                          error energy  % of error
+LL (colour/illumination)          0.022002       97.3%
+LH (horizontal detail)            0.000240        1.1%
+HL (vertical detail)              0.000298        1.3%
+HH (diagonal detail)              0.000072        0.3%
+
+low_freq_transformer  :   198,533  ( 7.3%)
+high_freq_transformer : 1,774,725  (65.0%)   ratio high:low = 8.9x
+```
+
+**97.3% of what is still wrong with the output is low-frequency colour error, and the branch
+responsible for it holds one ninth of the parameters of the branch responsible for the other
+2.7%.** The independent reviewer reached the same conclusion from a different direction: the
+high branch's FFN alone is 1,181,568 params = **43.3% of the entire model**, and instrumenting
+the trained checkpoint on real UIEB images it contributes only **8.9%** of its own branch's
+residual magnitude (the low branch's FFN contributes 27.1%).
+
+Root cause is mechanical, not a considered choice: `model.py:62` builds the high branch with
+`embed_dim = embed_dim * 3` (=384, because LH/HL/HH are concatenated), and
+`transformer_block.py:28` defaults `mlp_ratio=4`, so the FFN width triples with it and the
+parameter count grows with the square. Nobody chose this ratio; it fell out of a default.
+
+### F2 — The transformer block has no spatial structure at all  [HIGH]
+
+`tools/_permcheck.py` — permute the tokens and the physics grid by the same permutation:
+
+```
+max |block(P(x), P(pf)) - P(block(x, pf))| = 5.960e-07
+output scale                               = 4.390
+relative                                   = 1.358e-07   -> permutation-equivariant
+adjacent-token swap diff                   = 3.576e-07   -> no locality either
+positional-encoding references in models/ + train.py: 0
+```
+
+The block is **exactly permutation-equivariant** to float32 precision. LayerNorm is per-token,
+the FFN is two `nn.Linear` so it is per-token, attention is set-based, and the physics bias has
+shape `(B, heads, 1, N)` — key-side only, so it tells token *i* nothing about *i*.
+
+Why this matters specifically here: `docs/architecture.md` Module 4 assigns the high-frequency
+branch "Texture restoration, Edge enhancement, Fine detail recovery". An edge *is* a spatial
+arrangement. A permutation-equivariant operator cannot represent one. The branch is being asked
+to do a job its own structure forbids.
+
+### F3 — The "physics encoder" contains no physics  [HIGH]
+
+`models/physics_encoder.py` is `Conv3x3(3→64) → GELU → 2×ResBlock → Conv3x3(64→64)`. That is a
+generic CNN. Its only input is the same RGB the wavelet branch already receives, so it can only
+re-derive what the rest of the network could compute itself. Its output is the `P` in
+`Softmax(QK'/√d + λP)V` and is also fed to fusion — so the entire "physics-guided" premise rests
+on it.
+
+Two concrete problems, both measured:
+
+**(a) It structurally cannot see the statistics that matter.** Every layer is a 3×3 `Conv2d`;
+there is no `AdaptiveAvgPool2d` and no `Linear` anywhere in the module. Image-wide per-channel
+means are therefore not representable at any depth.
+
+**(b) Those are exactly the statistics that predict the answer.** `tools/_physicsprobe.py` takes
+8 cheap closed-form priors (dark channel, bright channel, local std, per-channel means, R/G and
+R/B ratios) and regresses them against the per-channel gain the UIEB reference actually applies:
+
+```
+gain_R: R^2 = 0.244     gain_G: R^2 = 0.494     gain_B: R^2 = 0.624
+strongest single correlations: mu_G vs gain_G -0.619, mu_B vs gain_B -0.602,
+                               bcp vs gain_G  -0.573, R/B  vs gain_B +0.464
+```
+
+Roughly a quarter to two thirds of the colour correction is **linearly predictable from eight
+numbers** the module cannot compute.
+
+### F4 — `L_frequency` is a duplicate of L1  [MEDIUM · resolves session 1's confound]
+
+`tools/_lossdiag.py`, on the trained model over the held-out set:
+
+```
+term                     raw   weight   weighted  % of total
+l1_loss              0.05256     1.00    0.05256       36.1%
+ssim_loss            0.07451     0.50    0.03726       25.6%
+perceptual_loss      0.50827     0.10    0.05083       35.0%
+frequency_loss       0.03186     0.15    0.00478        3.3%
+
+corr(pixel L1, LL band L1)      = +0.9997     LL   mean 0.10307
+corr(pixel L1, LH band L1)      = +0.3851     LH   mean 0.00885
+corr(pixel L1, HL band L1)      = +0.3761     HL   mean 0.00959
+corr(pixel L1, HH band L1)      = +0.2624     HH   mean 0.00498
+corr(pixel L1, mean-of-4-bands) = +0.9914
+```
+
+The Haar LL band is a local average, so its L1 is **99.97% correlated with pixel L1** — and
+because LL's magnitude is 10-20× the detail bands', it dominates the 4-band mean. `L_frequency`
+as implemented is therefore, to 99% accuracy, **a second copy of L1 at weight 0.15**,
+contributing 3.3% of the objective. It cannot be "pulling its weight" when it is collinear with
+a term already at weight 1.0.
+
+The genuinely non-redundant signal is in LH/HL/HH (correlations 0.26-0.39) — but averaging them
+with LL drowns it.
+
+### Checked and found FINE — worth recording, it rules things out
+
+* **InstanceNorm2d does NOT erase the global colour cast.** I suspected it did (it normalises
+  each channel of each sample to zero mean/unit variance, and a colour cast is a per-channel
+  shift). `tools/_normprobe.py` applies a synthetic cast and measures the relative change in
+  each representation: features change **more** after the norm, not less (39.8% vs 27.9% for a
+  strong cast). The 1×1 conv mixes channels before the norm, so a per-channel input scale does
+  not map to a per-channel normalised shift. **Hypothesis falsified.**
+* **Physics guidance really does reach both branches.** README's claim holds — `model.py:94`
+  passes `physics_features` to the low branch and `:108` to the high branch.
+* **`transformer_block.py`'s pre-LN wiring is textbook-correct.** Both residuals branch off the
+  un-normalised stream; `norm1` is correctly shared across q/k/v; `model.py:54-55` supplies the
+  final LayerNorm the pre-LN convention requires.
+* **`fusion_norm` being reused at `model.py:101` and `:138` is harmless.** `nn.InstanceNorm2d`
+  defaults to `affine=False, track_running_stats=False`, so it holds no parameters and no state
+  — it is a pure function, and reuse is a cosmetic smell rather than a bug.
+
+### F5 — THE FINDING: the model has no pathway to emit a per-image colour correction  [HIGHEST]
+
+Two independent reviewers converged on this from different modules, and I verified the
+headline number myself (`tools/_oracle_dc.py`, held-out 89, converged model at 24.9015 dB):
+
+```
+condition                                        PSNR     SSIM    delta
+model as-is                                   24.9015   0.9267    0.000
++ oracle per-image per-channel OFFSET         28.1038   0.9349   +3.202
++ oracle per-image per-channel AFFINE         30.3572   0.9485   +5.456
+
+fraction of remaining error energy that is pure per-image per-channel DC: 43.1%
+for scale, the gap to the pre-fix baseline is 25.114 - 24.902 =           0.212 dB
+```
+
+**A single per-image, per-channel constant is worth +3.20 dB — fifteen times the gap this
+project has spent two sessions trying to close.** And nothing in the network could produce
+one:
+
+* `model.py:160-162` applies `InstanceNorm2d(affine=False)` to the refinement head's input,
+  setting its per-image per-channel mean to **exactly zero** (measured GAP magnitude 7.0e-09).
+* `model.py:138` does the same to the fusion output one line after it is computed, discarding
+  53.8% of that output's energy.
+* The refinement head's measured receptive field is **9x9**, with no global-pooling path, and
+  every convolution in it was `bias=False`.
+* The physics encoder was all 3x3 convolutions (F3), so it could not supply the statistic either.
+
+So the last stage capable of applying a colour correction was handed a tensor with that exact
+information deleted, and could only see through a 9x9 window. This is not a tuning problem;
+it is a missing pathway. It also explains F1: "97.3% of the error is in the LL band" and
+"43% of the error is a per-image DC term" are the same phenomenon seen at two resolutions.
+
+My earlier `_normprobe.py` result is not contradicted — I had tested the *wrong* normalisation
+(`low_projection_norm`, early in the encoder, which indeed does not erase the cast). The two
+that matter sit immediately before the decoder.
+
+---
+
+## PHASE 2 — Fixes applied, each verified before training
+
+All six verification checks pass (`tools/verify_session3_fixes.py`). Full output in the commit.
+
+| # | Fix | Targets | Verified by |
+|---|---|---|---|
+| 1 | `GlobalColorCorrection` — per-image per-channel affine predicted from a physics context vector, applied to the decoded image, **identity at init** | F5 (+3.20 dB headroom) | checks 3 + 4 |
+| 2 | Physics encoder rebuilt: 8 closed-form priors as input + a global-pooling context branch | F3 (no physics, no global stats) | checks 1 + 2 |
+| 3 | `high_mlp_ratio` 4 -> 2 | F1 (65% of params serving 2.7% of error) | param count |
+| 4 | `lambda_frequency` 0.15 -> **0.0** | F4 (99.97% duplicate of L1) | measured correlation |
+| 5 | BatchNorm -> GroupNorm in refinement + fusion; final conv gains a bias | measured 0.42 dB train/eval gap at batch 8 | check 5 |
+| 6 | Fusion residual block gains a second conv (branch previously ended in GELU, so it could raise a feature without bound but lower it by at most ~0.17) | asymmetric residual | compiles + forward |
+
+**The model got SMALLER: 2,729,450 -> 2,308,723 parameters (-420,727, -15.4%).** That is
+deliberate. If the retrained model improves, it cannot be attributed to added capacity.
+
+### The decisive verification (check 4)
+Freeze the entire network, fit **only** the 4,550 global-correction parameters against the
+oracle per-image offset, and see how much of the headroom a physics-context-predicted affine
+can actually express:
+
+```
+base (no correction)          : 11.2892 dB
+oracle per-image offset       : 12.7508 dB   (headroom +1.462)
+learned from physics context  : 12.6289 dB   (recovered +1.340)
+fraction of headroom captured : 91.7%
+```
+
+**91.7%.** The pathway is not merely present, it is expressive enough to deliver almost all of
+what the oracle offers — and it does so from the physics context alone, which is the whole
+premise of a "physics-guided" model. (This is measured on an *untrained* network, so it
+demonstrates the pathway's capacity, not the final model's quality.)
+
+### Other verification highlights
+```
+CHECK 1  R/G prior falls monotonically with cast severity: 0.7250 -> 0.5800 -> 0.4350 -> 0.2900
+CHECK 2  encoder now contains Linear/global-pool layers: True (old: False)
+         context change 6.28% mild cast -> 17.95% severe cast
+CHECK 3  global correction at init: max|out-in| = 0.000e+00, gain exactly 1.0, shift exactly 0.0
+CHECK 5  refinement head max|train(x)-eval(x)| = 0.000e+00  (BatchNorm gave a nonzero gap)
+CHECK 6  gradients reach context_mlp, se, the 11-channel stem, the predictor and the new bias
+```
+
+### S3-D-001 — `lambda_frequency` set to 0, not merely reduced
+The brief allowed either 0 or a value below 0.15. The measurement (F4) makes it 0: the term is
+99.97% correlated with pixel L1 on the LL band, which dominates the 4-band mean by 10-20x, so
+it is a duplicate of a term already at weight 1.0. A duplicate cannot "pull its weight" at any
+non-zero coefficient — reducing it would just shrink a redundancy rather than remove it.
+
+This also resolves session 1's confound: the post-fix runs can no longer be explained by an
+untested extra loss term.
+
+**A genuinely non-redundant frequency loss is still available and worth trying later:** apply
+it to LH/HL/HH **only** (correlations with pixel L1 of 0.26-0.39, i.e. real independent
+signal) and drop LL, whose consistency L1 already enforces. I did not do that here because it
+would add a new variable to a run that already bundles six changes.

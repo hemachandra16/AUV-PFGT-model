@@ -10,14 +10,18 @@ class ResidualFusionBlock(nn.Module):
     def __init__(self, channels: int = 128) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-        self.norm = nn.BatchNorm2d(channels)
+        self.norm1 = nn.GroupNorm(num_groups=min(8, channels), num_channels=channels)
         self.act = nn.GELU()
+        # Second convolution: a residual block whose branch ends in an activation can
+        # raise a feature without bound but lower it by at most ~0.17 (the GELU minimum),
+        # which is a hard, weight-independent asymmetry. Ending on a conv removes it.
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
+        self.norm2 = nn.GroupNorm(num_groups=min(8, channels), num_channels=channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         residual = x
-        out = self.conv1(x)
-        out = self.norm(out)
-        out = self.act(out)
+        out = self.act(self.norm1(self.conv1(x)))
+        out = self.norm2(self.conv2(out))
         return residual + out
 
 
@@ -38,7 +42,7 @@ class FeatureFusion(nn.Module):
         self.channels = channels
         self.projection = nn.Sequential(
             nn.Conv2d(channels * 3, channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(channels),
+            nn.GroupNorm(num_groups=min(8, channels), num_channels=channels),
             nn.GELU(),
         )
         self.residual_block = ResidualFusionBlock(channels)

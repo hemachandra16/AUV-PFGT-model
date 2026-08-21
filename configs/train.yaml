@@ -21,6 +21,11 @@ dataloader:
 model:
   embed_dim: 128
   num_heads: 4
+  context_dim: 64             # width of the image-global physics context vector
+  low_mlp_ratio: 4            # LL branch carries 97.3% of the residual error
+  high_mlp_ratio: 2           # was effectively 4; its FFN was 43.3% of the whole model
+  use_global_correction: true # per-image colour affine; oracle headroom +3.20 dB
+  use_physics_priors: true    # closed-form dark/bright channel + global colour stats
 
 # ---- Loss weights ------------------------------------------
 # L_total = lambda_l1*L1 + lambda_perceptual*L_perc + lambda_ssim*L_SSIM
@@ -29,7 +34,9 @@ loss:
   lambda_l1: 1.0
   lambda_ssim: 0.5
   lambda_perceptual: 0.1
-  lambda_frequency: 0.15       # Haar-DWT sub-band L1; was specified in docs but unimplemented
+  lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
+                               # the LL band, i.e. a duplicate of L1 at 0.15 weight
+                               # contributing 3.3% of the objective. See PROGRESS.md F4.
 
 # ---- Optimizer ---------------------------------------------
 optimizer:

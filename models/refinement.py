@@ -10,7 +10,10 @@ class ResidualRefinementBlock(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
         self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-        self.norm = nn.BatchNorm2d(channels)
+        # GroupNorm, not BatchNorm: at batch size 8 BatchNorm makes this head train a
+        # different function from the one it is evaluated as (measured ~0.42 dB), and
+        # its deployed running statistics come from a very short EMA window.
+        self.norm = nn.GroupNorm(num_groups=min(8, channels), num_channels=channels)
         self.act = nn.GELU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -38,7 +41,7 @@ class ImageRefinementHead(nn.Module):
 
         self.stage1 = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.GroupNorm(8, 64),
             nn.GELU(),
         )
 
@@ -46,12 +49,12 @@ class ImageRefinementHead(nn.Module):
 
         self.stage2 = nn.Sequential(
             nn.Conv2d(64, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.GroupNorm(8, 32),
             nn.GELU(),
         )
 
         self.final_conv = nn.Sequential(
-            nn.Conv2d(32, 3, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(32, 3, kernel_size=3, padding=1, bias=True),
             nn.Sigmoid(),
         )
 
