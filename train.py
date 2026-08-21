@@ -314,6 +314,7 @@ def main() -> None:
         lambda_ssim=loss_cfg.get("lambda_ssim", 0.5),
         lambda_perceptual=loss_cfg.get("lambda_perceptual", 0.1),
         lambda_frequency=loss_cfg.get("lambda_frequency", 0.1),
+        lambda_dc=loss_cfg.get("lambda_dc", 0.0),
     ).to(device)
 
     # ---- Optimizer ----
@@ -371,6 +372,7 @@ def main() -> None:
         running_ssim_loss = 0.0
         running_perc = 0.0
         running_freq = 0.0
+        running_dc = 0.0
         total_steps_epoch = 0
 
         for step, (inputs, targets) in enumerate(train_loader):
@@ -403,6 +405,7 @@ def main() -> None:
             running_ssim_loss += float(losses["ssim_loss"].item())
             running_perc += float(losses["perceptual_loss"].item())
             running_freq += float(losses["frequency_loss"].item())
+            running_dc += float(losses["dc_loss"].item())
             total_steps_epoch += 1
             global_step += 1
 
@@ -410,13 +413,14 @@ def main() -> None:
             if global_step % log_every == 0:
                 logger.info(
                     "epoch=%d/%d  step=%d  loss=%.6f  l1=%.6f  ssim=%.6f  "
-                    "perc=%.6f  freq=%.6f  grad_norm=%.4f  lr=%.2e",
+                    "perc=%.6f  freq=%.6f  dc=%.6f  grad_norm=%.4f  lr=%.2e",
                     epoch + 1, total_epochs, step + 1,
                     float(total_loss.item()),
                     float(losses["l1_loss"].item()),
                     float(losses["ssim_loss"].item()),
                     float(losses["perceptual_loss"].item()),
                     float(losses["frequency_loss"].item()),
+                    float(losses["dc_loss"].item()),
                     float(grad_norm),
                     current_lr,
                 )
@@ -425,6 +429,7 @@ def main() -> None:
                 writer.add_scalar("train/ssim_loss", float(losses["ssim_loss"].item()), global_step)
                 writer.add_scalar("train/perceptual_loss", float(losses["perceptual_loss"].item()), global_step)
                 writer.add_scalar("train/frequency_loss", float(losses["frequency_loss"].item()), global_step)
+                writer.add_scalar("train/dc_loss", float(losses["dc_loss"].item()), global_step)
                 writer.add_scalar("train/grad_norm", float(grad_norm), global_step)
                 writer.add_scalar("train/lr", current_lr, global_step)
 

@@ -16,11 +16,13 @@ class PFGTLoss(nn.Module):
     Implements the objective specified in ``docs/math.md`` section 8:
 
         L_total = lambda1*L1 + lambda2*L_perceptual + lambda3*L_SSIM + lambda4*L_frequency
+                  + lambda_dc*L_dc
 
     - L1 reconstruction loss for pixel-level accuracy
     - SSIM-based structural loss for perceptual consistency
     - Perceptual loss from pretrained VGG19 features for semantic similarity
     - Frequency loss for wavelet sub-band consistency
+    - DC loss: direct supervision of the per-image per-channel mean (the colour cast)
 
     The frequency term was specified in the docs but missing from the implementation.
     It is computed as the L1 distance between the Haar-DWT sub-bands (LL/LH/HL/HH) of
@@ -38,6 +40,7 @@ class PFGTLoss(nn.Module):
         lambda_ssim: float = 0.5,
         lambda_perceptual: float = 0.1,
         lambda_frequency: float = 0.1,
+        lambda_dc: float = 0.0,
     ) -> None:
         super().__init__()
 
@@ -49,11 +52,14 @@ class PFGTLoss(nn.Module):
             raise ValueError(f"lambda_perceptual must be non-negative, got {lambda_perceptual}.")
         if lambda_frequency < 0:
             raise ValueError(f"lambda_frequency must be non-negative, got {lambda_frequency}.")
+        if lambda_dc < 0:
+            raise ValueError(f"lambda_dc must be non-negative, got {lambda_dc}.")
 
         self.lambda_l1 = lambda_l1
         self.lambda_ssim = lambda_ssim
         self.lambda_perceptual = lambda_perceptual
         self.lambda_frequency = lambda_frequency
+        self.lambda_dc = lambda_dc
 
         # Reuses the same Haar DWT the model itself is built on.
         self.wavelet = WaveletTransform(wavelet="haar", level=1)
@@ -83,12 +89,14 @@ class PFGTLoss(nn.Module):
         ssim_loss = self._ssim_loss(prediction, target)
         perceptual_loss = self._perceptual_loss(prediction, target)
         frequency_loss = self._frequency_loss(prediction, target)
+        dc_loss = self._dc_loss(prediction, target)
 
         total_loss = (
             self.lambda_l1 * l1_loss
             + self.lambda_ssim * ssim_loss
             + self.lambda_perceptual * perceptual_loss
             + self.lambda_frequency * frequency_loss
+            + self.lambda_dc * dc_loss
         )
 
         return {
@@ -97,6 +105,7 @@ class PFGTLoss(nn.Module):
             "ssim_loss": ssim_loss,
             "perceptual_loss": perceptual_loss,
             "frequency_loss": frequency_loss,
+            "dc_loss": dc_loss,
         }
 
     def _l1_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -127,6 +136,33 @@ class PFGTLoss(nn.Module):
             for pred_band, target_band in zip(pred_bands, target_bands)
         ]
         return torch.stack(band_losses).mean()
+
+    def _dc_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """L1 between the per-image, per-channel means — i.e. the global colour cast.
+
+        Why this term exists. Session 3 measured that an oracle per-image per-channel offset is
+        worth **+3.36 dB** on the held-out set (``tools/_oracle_dc.py``), and built
+        ``GlobalColorCorrection`` to supply one. Trained end to end, that module instead settled
+        on an almost constant tone shift (predicted gain std ~0.02) and left the headroom
+        untouched — even though the same 4,550 parameters recover 91.7% of it when trained
+        directly against the oracle target. The pathway was expressive enough; nothing in the
+        objective was asking for it.
+
+        L1, SSIM and perceptual are all dominated by *spatial* error. A single global constant
+        per channel contributes almost nothing to them, and can be traded away for a marginal
+        texture gain. This term supervises that constant directly.
+
+        It is computed exactly as ``tools/_oracle_dc.py`` computes its oracle target
+        (``(target - prediction).mean(dim=(2, 3))``), so the loss and the measurement are
+        apples-to-apples.
+
+        L1 rather than MSE, on measured grounds: the DC errors are small (~0.035), and
+        d|x|/dx = 1 while d(x^2)/dx = 2x = 0.070 there — MSE would give a ~14x weaker push
+        exactly where the push is needed.
+        """
+        pred_mean = prediction.mean(dim=(2, 3))
+        target_mean = target.mean(dim=(2, 3))
+        return (pred_mean - target_mean).abs().mean()
 
     def _perceptual_loss(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Perceptual loss computed from VGG19 feature activations.

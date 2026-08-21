@@ -957,3 +957,110 @@ Six changes were bundled with no ablation, so the +0.250 dB cannot be attributed
 them — and the one I expected to dominate demonstrably did not. Most likely sources are the
 mundane fixes: GroupNorm removing a measured 0.42 dB train/eval mismatch, the capacity
 rebalance, and dropping a redundant loss term. Ablation is next-step #2.
+
+---
+---
+
+# SESSION 4 — 2026-08-22 — Claiming the Unclaimed Headroom
+
+**Goal:** make the model actually use the `GlobalColorCorrection` pathway session 3 built for
+it, and find out which of session 3's six bundled changes mattered.
+
+## PHASE 0 — State check
+- [x] Clean tree at `71942d7`; power plan still High performance; no stray trainers
+- [x] `checkpoints/best.pt` = epoch 76, 25.2139 dB (AMP) — matches the session-3 record
+- [x] Backed up to `checkpoints/_session4_backup/` (md5 `e36a4fd1…` verified)
+- [x] Oracle headroom reconfirmed, no drift:
+```
+model as-is                                   25.3644   0.9289    0.000
++ oracle per-image per-channel OFFSET         28.7223   0.9398   +3.358
++ oracle per-image per-channel AFFINE         31.1767   0.9530   +5.812
+fraction of error energy that is pure per-image per-channel DC: 45.2%
+```
+
+## PHASE 1 — `L_dc`, and what it took to get there
+
+### S4-D-001 — L1, not MSE, on measured grounds
+`L_dc = |mean(pred, per-image per-channel) − mean(target, …)|`, computed exactly as
+`tools/_oracle_dc.py` computes its oracle target, so loss and measurement are apples-to-apples.
+
+L1 over MSE because the DC errors are small (~0.035): `d|x|/dx = 1` while `d(x²)/dx = 2x = 0.070`
+there, so **MSE would push ~14× more weakly exactly where the push is needed**.
+
+### S4-D-002 — `lambda_dc = 1.0`, calibrated by gradient, not by guesswork
+The brief suggested 0.1–0.2. Measuring the gradient *at the module* says that would have
+reproduced session 3's failure exactly:
+
+```
+||grad|| at global_correction.predictor from L_dc at weight 1.0 : 3.45e-01
+||grad|| at the same params from L1 + SSIM + perceptual         : 2.33e-01
+
+ lambda_dc   ratio vs others   % of objective
+       0.3             0.44x             6.6%     <- L_dc still LOSES at the module
+       0.7             1.03x            14.1%
+       1.0             1.48x            19.0%     <- chosen
+       2.0             2.96x            32.0%
+parity (ratio 1.0) at lambda_dc = 0.68
+```
+
+At 0.3 the old terms still dominate the very parameters L_dc is supposed to move. Chose **1.0**:
+1.48× dominance at the module, while the spatial terms still hold 81% of the objective.
+
+---
+
+## The finding that reframes this session: most of the +3.36 dB is NOT reachable
+
+Verification checks 3/4 initially failed in a revealing way — optimising L_dc *directly* cut the
+DC error by only 18.4%, and the predicted shift **anti-correlated** with what each image needed
+(−0.12 / −0.05 / −0.51). Three hypotheses, each tested and killed:
+
+1. **"The context can't predict the offset."** Ordinary least squares said it can:
+   R² = 0.692 / 0.866 / 0.897. Hypothesis apparently refuted.
+2. **"The clamp inside `GlobalColorCorrection` is eating the gradient."** Measured: only
+   **0.93%** of pixels are clamped, and removing the clamp changed the fit from 18.4% to 16.5%.
+   Dead.
+3. **Then I distrusted my own R².** That fit put **64 context dimensions through 89 samples** —
+   it could not not overfit. Redone properly with ridge regression fit on the 801 training
+   images and evaluated on the held-out 89 (`tools/_ctx_cv.py`):
+
+```
+                                                 R2_R    R2_G    R2_B
+physics_context, HELD-OUT                       0.015   0.104   0.346
+physics_context, in-sample (my first test)      0.670   0.847   0.886   <- overfit, not evidence
+adding input mean / output mean barely helps
+```
+
+**The needed offset is mostly not predictable from the input.** The oracle computes it from the
+ground-truth reference, and UIEB's references are *human-retouched* — so a large part of that
+offset is a retoucher's choice, not a function of the photograph.
+
+`tools/_achievable_ceiling.py` puts a number on it. Fit the best linear offset predictor on the
+801 training images, apply it to the held-out 89:
+
+| condition | PSNR | vs base |
+|---|---|---|
+| model with the correction removed | 22.594 | — |
+| + CONSTANT offset (**what session 3 learned**) | 22.730 | +0.136 |
+| + offset PREDICTED from the input (best linear, held-out) | 23.275 | **+0.681** |
+| + ORACLE offset (uses ground truth) | 25.387 | +2.793 |
+
+**Only 24.4% of the headroom is achievable from the input at all.** The "+3.36 dB" that has been
+quoted since session 3 — by me — is an upper bound that requires the answer sheet.
+
+But this is not a dead end: session 3's module captured **+0.136** of an available **+0.681**,
+so roughly **+0.55 dB is genuinely on the table** — more than double session 3's entire +0.25 dB
+win. That is what tonight's run targets, and it is the honest number to judge it against.
+
+### S4-D-003 — verification thresholds corrected to a reachable standard
+Check 4 originally demanded the predicted shift correlate strongly with the needed offset. Once
+the held-out R² was measured, that bar was revealed as unreachable by construction. Rewritten to
+test what can actually be achieved: the DC error must fall, and the correction must stop being a
+constant. Recording this because moving a threshold after seeing a failure is exactly the kind of
+change that deserves to be visible rather than quiet.
+
+Final verification at `lambda_dc = 1.0` — all three PASS:
+```
+ratio (L_dc / others) at the module : 1.48x        -> L_dc dominates
+mean |DC error| 0.03509 -> 0.02863  (18.4% reduction)
+predicted SHIFT std  [0.0151,0.0100,0.0148] -> [0.0604,0.0281,0.0657]   (4x more per-image)
+```

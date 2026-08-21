@@ -34,6 +34,13 @@ loss:
   lambda_l1: 1.0
   lambda_ssim: 0.5
   lambda_perceptual: 0.1
+  lambda_dc: 1.0               # NEW (session 4): direct supervision of the per-image
+                               # per-channel mean. Session 3 measured +3.36 dB of oracle
+                               # headroom in exactly this quantity, and the end-to-end
+                               # loss never routed a signal to the module built for it.
+                               # Calibrated by measuring the GRADIENT at the module:
+                               # parity with L1+SSIM+perceptual is at 0.68, so 1.0
+                               # gives 1.48x dominance and 19% of the objective.
   lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
                                # the LL band, i.e. a duplicate of L1 at 0.15 weight
                                # contributing 3.3% of the objective. See PROGRESS.md F4.
