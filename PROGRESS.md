@@ -465,3 +465,75 @@ Also fixed a bad monitoring habit: `ps -W` on this machine prints only the execu
 **not the arguments**, so `ps -W | grep watchdog.py` never matches and any wait-loop built
 on it exits instantly (my first completion waiter did exactly that, firing at epoch 19 of
 150). All process checks now go through psutil, which sees full command lines.
+
+## PHASE 3 — Fair comparison + evidence
+- [x] 3.1 Leak-free `validate.py` on the held-out 89 (fp32, fixed UCIQE)
+- [x] 3.2 Three-way comparison table
+- [x] 3.3 Sample panels -> `outputs/_final_check_150ep/` (last night's `_final_check/` untouched)
+- [x] 3.4 Commit
+
+### The run finished on its own terms
+```
+Early stopping triggered: PSNR did not improve for 20 validation rounds.
+Training complete. Best PSNR: 24.7587
+Best checkpoint: checkpoints/best.pt   (epoch 81, step 8100)
+```
+101 epochs run, best at epoch 81, then 20 validation rounds without improvement. **It
+converged — it was not cut short.** That matters more than any single number here, because
+it removes last night's excuse.
+
+### Headline: the three-way comparison (held-out 89 images, fp32, fixed UCIQE)
+
+| Model | Epochs | PSNR | SSIM | UIQM | UCIQE |
+|---|---|---|---|---|---|
+| Pre-fix baseline | 115 | **25.114 dB** | **0.9281** | 10.001 | 0.3133 |
+| Post-fix, time-boxed (session 1) | 50 | 24.956 dB | 0.9261 | **10.135** | 0.3125 |
+| **Post-fix, converged (tonight)** | **101 (best @ 81)** | 24.902 dB | 0.9267 | 9.963 | **0.3144** |
+
+**Verdict: the fix did not pay off on PSNR/SSIM, and the "it just needs more epochs"
+explanation is now dead.** Given a full, fair, converged budget on an un-throttled GPU, the
+fixed architecture lands **0.212 dB below** the pre-fix baseline — and fractionally below
+even its own 50-epoch version. Session 1 predicted the gap would close with training; it did
+not. That prediction is falsified, and I am recording it as such.
+
+SSIM is effectively a tie (−0.0014). UCIQE is marginally the best of the three (+0.0011).
+Neither changes the conclusion.
+
+### Sample-level detail — `outputs/_final_check_150ep/`
+Four-panel comparisons, `raw | pre-fix 115ep | post-fix converged | reference`:
+```
+image             PSNR ref|OLD  PSNR ref|NEW
+708_img_.png             26.87         21.38
+15094.png                23.83         27.97
+356_img_.png             27.44         28.20
+372_img_.png             18.66         18.13
+290_img_.png             24.53         22.75
+172_img_.png             28.84         25.81
+MEAN                     25.03         24.04
+```
+Note this is **not** a uniform regression — the new model clearly wins on `15094` (+4.1 dB)
+and `356` (+0.8 dB) and clearly loses on `708` (−5.5 dB) and `172` (−3.0 dB). The aggregate
+gap is an average over genuinely mixed per-image outcomes, not a flat degradation.
+
+### S2-D-004 — an important confound in this comparison, stated up front
+The two post-fix rows differ from the baseline in **two** ways, not one:
+1. the rebuilt physics-guided attention (real Q/K/V, multi-head, per-head physics bias), and
+2. the added `L_frequency` term (Haar-DWT sub-band L1, `lambda_frequency: 0.15`), which
+   session 1 introduced because `docs/math.md` §8 specifies it but it was never implemented.
+
+So this table compares **pre-fix codebase vs post-fix codebase**, which is exactly the
+question tonight's brief asked. It does **not** isolate the attention change on its own. If
+the goal becomes "what did the attention fix specifically cost or buy", the clean control is
+one more run at `lambda_frequency: 0.0` with everything else identical. Flagged rather than
+glossed over, because the headline number would otherwise be over-attributed to the
+attention rewrite alone.
+
+### What this does and does not say
+It does **not** invalidate the session 1 finding. The old attention module was provably
+incapable of a global colour shift (`tools/verify_attention.py`: MSE 9.000 = 3.0², output
+mean unmoved), and that remains true. What tonight establishes is narrower and more useful:
+**making the project's headline novelty actually function does not, by itself, improve PSNR
+on UIEB.** The enhancement network has several other learnable colour-remapping paths
+(physics encoder convs, 1x1 band projections, fusion block, refinement head) that were
+evidently already carrying that work. The fix is a correctness and honesty issue — the
+paper's central claim now describes what the code does — not a metrics win.
