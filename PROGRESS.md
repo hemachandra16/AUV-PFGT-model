@@ -366,3 +366,77 @@ inside tonight's window. Session 1's throttled estimate for the same run was 6.1
 Watch item for the watchdog: the die reached 77 C within 150 s. If sustained training
 drives it to the thermal limit, `SwThermalSlowdown` / `HwThermalSlowdown` would appear and
 clocks would fall. The probe now warns on those bits specifically.
+
+## PHASE 1 — Launch the fair-comparison run
+- [x] 1.1 Launched fresh (no `--resume`, no `--epochs` override) so early stopping decides the real endpoint, exactly as the 115-epoch baseline was produced:
+      `python train.py --config configs/train.yaml --num-workers 2` -> `logs/train.log`
+- [x] 1.2 Confirmed real training within the first minute (not silence, not an instant crash)
+- [x] 1.3 Commit
+
+Startup evidence:
+```
+Config: epochs=150  bs=8  lr=2.00e-04  amp=True  workers=2  grad_clip=1.0
+Built PFGTUIEModel(embed_dim=128, num_heads=4)
+Model parameters: 2,729,450
+Dataset split: 801 train / 89 validation images (shared get_splits, seed=42)
+epoch=1/150  step=10  loss=0.851062 ...
+=== Epoch 7/150 finished | avg_loss=0.180495 | time=49.7s ===
+  Validation -> val_loss=0.176214  PSNR=23.0208 dB  SSIM=0.9030
+```
+Two useful confirmations there: **49.7 s/epoch** (vs 146 s last night — the throttle fix
+holding under real training load, not just in the probe), and `epoch=1 step=10
+loss=0.851062` reproduces session 1's `0.851053` to 5 decimal places, confirming seed-42
+determinism across the whole pipeline.
+
+Old periodic snapshots (`epoch_10..50.pt` from the 50-epoch run) were moved into
+`checkpoints/_50epoch_postfix_backup/` first, so tonight's `epoch_N.pt` files cannot be
+confused with last night's.
+
+## PHASE 2 — Autonomous watchdog
+- [x] 2.1 Built `tools/watchdog.py` and left it running for the night
+- [x] 2.2 Verified all three of its decision paths BEFORE trusting it (see S2-D-002)
+
+### S2-D-002 — the watchdog, and the two failure modes I found while testing it
+The brief asked for a check-and-recover cycle every 20-30 min. A polling loop that only I
+drive has a worst case of ~30 min of dead GPU time per incident, and cannot act at all
+between turns, so I wrote a resident watchdog that polls every 60 s and restarts
+automatically. I still check in periodically on top of it.
+
+It is deliberately trivial in cost — it reads a log file and scans the process table, and
+never loads a model — so it cannot repeat session 1's crash (D-012), where a CPU-heavy
+evaluation run alongside training exhausted host RAM.
+
+**Testing it against the live run surfaced two bugs that would have made it useless:**
+
+1. **False "alive" from launcher wrappers.** A `nohup -> .venv shim -> real python` chain
+   produces *three* processes whose command line is `train.py --config ...`:
+   ```
+   [(7320, '2253MB'), (23196, '6MB'), (25400, '4MB')]
+   ```
+   Only pid 7320 is the real trainer. If it died and a 6 MB wrapper lingered, a naive
+   presence check would report "healthy" and the watchdog would never restart — the exact
+   failure a watchdog exists to prevent. Fixed by requiring >=200 MB RSS to count as the
+   real trainer.
+
+2. **No stall detection at all.** The brief lists "a crash, an OOM, a stall". Process
+   presence catches the first two but not a hang (deadlocked dataloader, wedged CUDA
+   call) where the process stays resident and silent. Added: if `logs/train.log` goes
+   unmodified for 900 s while the process lives, kill the whole process tree and resume
+   from `latest.pt`. Epochs take ~50 s and a step line lands every ~5 s, so 15 minutes of
+   silence is unambiguous.
+
+**All three decision paths verified against reality rather than assumed:**
+```
+training_running()   -> 7320          (picks the 2253MB trainer, ignores the 6MB/4MB shims)
+log_says_done()      -> None          on the live log
+log_says_done()      -> 'Training complete.'   on the archived finished 50-epoch log
+halve_batch_size()   -> (8, 4) then (4, 2)     then restored to 8, config identical to HEAD
+```
+That last one matters: an OOM handler whose regex silently misses would leave the run
+OOM-looping all night. Tested it explicitly, then `git checkout -- configs/train.yaml`.
+
+Restart semantics: resumes with `--resume checkpoints/latest.pt` and **no** `--epochs`
+override, so `train.py` keeps the 150-epoch total from the config and its LR stays on the
+original warmup+cosine curve (`global_step / total_steps`) rather than restarting the
+schedule — the mistake session 1's D-009 warned about. Safety valve: 25 restarts max, with
+escalating backoff if a restart dies inside its grace period.
