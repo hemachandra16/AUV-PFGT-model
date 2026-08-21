@@ -34,13 +34,18 @@ loss:
   lambda_l1: 1.0
   lambda_ssim: 0.5
   lambda_perceptual: 0.1
-  lambda_dc: 1.0               # NEW (session 4): direct supervision of the per-image
-                               # per-channel mean. Session 3 measured +3.36 dB of oracle
-                               # headroom in exactly this quantity, and the end-to-end
-                               # loss never routed a signal to the module built for it.
-                               # Calibrated by measuring the GRADIENT at the module:
-                               # parity with L1+SSIM+perceptual is at 0.68, so 1.0
-                               # gives 1.48x dominance and 19% of the objective.
+  lambda_dc: 0.0               # TESTED IN SESSION 4 AND TURNED OFF AGAIN.
+                               # Direct supervision of the per-image per-channel mean, added
+                               # to make GlobalColorCorrection do its job. It did not work:
+                               # held-out PSNR 25.364 -> 24.982 (-0.382 dB) while the oracle
+                               # headroom barely moved (+3.358 -> +3.192) and the module's
+                               # per-image variation did not increase.
+                               # Root cause, measured BEFORE the run: the needed offset is
+                               # only weakly predictable from the input (held-out ridge
+                               # R^2 = 0.015/0.104/0.346), because the UIEB references are
+                               # human-retouched. A stronger loss cannot create information
+                               # that is not in the input. Set to 0 so this config reproduces
+                               # the installed checkpoint. See FINAL_REPORT_SESSION4.md.
   lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
                                # the LL band, i.e. a duplicate of L1 at 0.15 weight
                                # contributing 3.3% of the objective. See PROGRESS.md F4.

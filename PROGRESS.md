@@ -1064,3 +1064,55 @@ ratio (L_dc / others) at the module : 1.48x        -> L_dc dominates
 mean |DC error| 0.03509 -> 0.02863  (18.4% reduction)
 predicted SHIFT std  [0.0151,0.0100,0.0148] -> [0.0604,0.0281,0.0657]   (4x more per-image)
 ```
+
+## PHASE 2 — Trained with `L_dc`, and it did not work
+- [x] 2.1 Fresh run, watchdog on, early stopping decided the end
+- [x] 2.2 Leak-free `validate.py`
+- [x] 2.3 Re-ran `tools/_oracle_dc.py` and the per-image variation check — the real test
+
+```
+Early stopping triggered: PSNR did not improve for 20 validation rounds.
+Training complete. Best PSNR: 24.8377     (best epoch 55, 75 epochs run)
+Watchdog: 0 restarts, 0 incidents.
+Held-out fp32: PSNR 24.9822  SSIM 0.9240  UIQM 10.1104  UCIQE 0.3167
+```
+
+| measure | session 3 | session 4 | change |
+|---|---|---|---|
+| held-out PSNR | 25.364 | 24.982 | **-0.382** |
+| held-out SSIM | 0.9289 | 0.9240 | -0.0049 |
+| oracle headroom remaining | +3.358 | +3.192 | -0.166 |
+| DC share of remaining error | 45.2% | 44.4% | -0.8 pts |
+| predicted gain std | [.022,.025,.033] | [.022,.017,.037] | ~unchanged |
+
+`L_dc` bought 0.166 dB of headroom and cost 0.382 dB of PSNR. The module still converged to a
+near-constant correction. Exactly what the Phase-1 measurement predicted: a stronger loss
+cannot create information the input does not contain.
+
+### S4-D-004 — restored session 3's checkpoint as canonical
+Session 4's model is worse, so leaving it as `checkpoints/best.pt` would quietly degrade the
+project. Restored session 3's (verified back at **25.3644 dB / 0.9289**) and preserved
+tonight's at `checkpoints/_session4_result/`. Also set `lambda_dc: 0.0` in the config so it
+reproduces the installed checkpoint rather than the worse one — a config that silently rebuilds
+a rejected model is a trap. The `_dc_loss` implementation stays in `models/loss.py`, working and
+documented, for any future experiment.
+
+## PHASE 3 — Ablation: NOT DONE
+Each arm is a full training run. The GPU was power-throttled to ~19 W of 77 W all night
+(`ChatGPT.exe` co-client again; re-applied the power fix, left the user's app alone), so epochs
+took ~146 s instead of ~50 s and one arm is ~3 hours. No room after the main run. It is
+next-step #1 and the project should not accept another bundled change before it is done.
+
+## PHASE 4/5 — Report and visual proof
+- [x] `FINAL_REPORT_SESSION4.md`
+- [x] `outputs/session4_proof.html` — self-contained (1.2 MB, 52 embedded images), opens by
+      double-click. 8 rows chosen as 4 best / 2 typical / 2 worst so losses are visible, plus 3
+      zoomed crops on the strongest colour casts. Verified it states plainly that tonight's
+      change did not work, names session 3 as best-and-installed, and marks session 3 as the
+      hero panel rather than letting "newest" imply "best".
+
+### Session verdict
+The intervention was correctly designed, correctly verified, and net negative. The finding
+worth keeping is the one measured before the run: **the +3.2 dB that has been quoted since
+session 3 — by me — is an oracle bound, and only 24.4% of it was ever reachable.** Retiring a
+wrong target is worth more than another 0.1 dB.
