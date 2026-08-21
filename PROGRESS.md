@@ -901,3 +901,59 @@ untested extra loss term.
 it to LH/HL/HH **only** (correlations with pixel L1 of 0.26-0.39, i.e. real independent
 signal) and drop LL, whose consistency L1 already enforces. I did not do that here because it
 would add a new variable to a run that already bundles six changes.
+
+## PHASE 3 — One informed training run
+- [x] 3.1 Backed up session-2 checkpoints to `checkpoints/_session3_backup/` (md5 verified)
+- [x] 3.2 GPU verified at full clock at launch (78.20 W / 2535 MHz / 53.7 s per epoch)
+- [x] 3.3 Launched fresh, watchdog running (reused, not rebuilt); early stopping decided the end
+- [x] 3.4 Leak-free `validate.py` on the held-out 89
+
+```
+Early stopping triggered: PSNR did not improve for 20 validation rounds.
+Training complete. Best PSNR: 25.2139     (best checkpoint: epoch 76, 96 epochs run)
+Watchdog: 0 restarts, 0 incidents.
+Held-out fp32: PSNR 25.3644  SSIM 0.9289  UIQM 10.1158  UCIQE 0.3221
+```
+
+### S3-D-002 — GPU re-throttled mid-run; I did not kill the user's application
+Epoch time went 53.7 s -> ~146 s around epoch 52. Diagnosis: the power plan had **not** reverted
+(still High performance) and the card was cool (54 C), but it re-entered `SwPowerCap` at ~19 W
+of 77 W, and a second GPU client had appeared — `ChatGPT.exe`'s on-device model service.
+Re-applying `powercfg /overlaysetactive OVERLAY_SCHEME_MAX` gave partial recovery
+(390 -> 690 MHz). I left the user's application alone: killing a running app of theirs is not a
+call I should make unattended. The run completed correctly, just slower.
+
+### S3-D-003 — a false "FINISHED" signal, caught
+My first completion waiter reported finished at epoch 13 of 150. Cause: `tools/_waitdone.py`
+had been deleted in session 2's cleanup commit, so it failed instantly with "can't open file",
+and the unguarded `echo "=== FINISHED ==="` after it printed anyway. Recreated the waiter with
+a `test -f` guard and a stricter condition (process gone **AND** a completion marker in the
+log, so a crash can never read as a finish). Also archived session 2's stale
+`watchdog_incidents.json`, which would otherwise have made this session's clean run appear to
+contain a prior "finished" event.
+
+## PHASE 4 — Comparison + report
+- [x] 4.1 `FINAL_REPORT_SESSION3.md`
+- [x] 4.2 Comparison panels -> `outputs/_final_check_session3/` (earlier sessions' evidence untouched)
+
+| Model | Epochs | Params | PSNR | SSIM |
+|---|---|---|---|---|
+| Pre-fix baseline | 115 | 2,729,450 | 25.114 | 0.9281 |
+| Post-fix, time-boxed (S1) | 50 | 2,729,450 | 24.956 | 0.9261 |
+| Post-fix, converged (S2) | 101 | 2,729,450 | 24.902 | 0.9267 |
+| **Session 3** | **96 (best@76)** | **2,308,723** | **25.364** | **0.9289** |
+
+**+0.250 dB over baseline, +0.462 over session 2, with 15.4% FEWER parameters.**
+
+### The miss, recorded plainly
+I predicted F5 (the missing global colour pathway) would be the dominant win. Measured on the
+new model, the oracle headroom is **still +3.358 dB** — essentially untouched. The module is
+active but converged to a near-constant tone adjustment (gain 1.250/1.255/1.258 with std
+0.022/0.025/0.033), despite the same 4,550 parameters capturing 91.7% of the headroom when
+trained directly against the oracle in check 4. The pathway is expressive enough; the
+end-to-end loss does not drive it there.
+
+Six changes were bundled with no ablation, so the +0.250 dB cannot be attributed to any one of
+them — and the one I expected to dominate demonstrably did not. Most likely sources are the
+mundane fixes: GroupNorm removing a measured 0.42 dB train/eval mismatch, the capacity
+rebalance, and dropping a redundant loss term. Ablation is next-step #2.
