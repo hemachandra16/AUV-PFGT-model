@@ -1225,3 +1225,50 @@ patience 10.
 re-calibrating an already-converged model toward UIEB's colour convention: a full-rate LR would
 wash out the representations learned from 6.3x the data, and a much smaller one would not shift
 the calibration at all. 40 epochs of 100 steps, warmup 1, patience 12.
+
+## PHASE 2 — Stage 1: pretrain on the union
+
+### S6-D-004 — ChatGPT.exe was NOT the root cause of the throttling  [CORRECTS THIS SESSION'S PREMISE]
+The brief states the throttling has been "traced every time to ChatGPT.exe running as a
+background GPU co-client". Killing all 10 of its processes did help, and produced the best
+power figure any session has recorded:
+
+```
+epoch 1-2, ChatGPT.exe gone : 87.76 W / 2535 MHz   ~340 s/epoch   (previous best ever: 79 W)
+```
+
+**But the clamp came back anyway at epoch 3**, with ChatGPT.exe absent and this training run the
+only GPU compute client:
+
+```
+epoch 3 : 19.33 W / 705 MHz / 55 C / util 99% / reasons 0x4 (SwPowerCap)   629 s/epoch
+```
+
+Re-applied the full fix and re-measured — no recovery:
+```
+powercfg /setactive <High performance>  exit 0
+powercfg /overlaysetactive OVERLAY_SCHEME_MAX  exit 0
+Win32_Battery BatteryStatus = 2 (on AC)
+after 60 s: 19.31 W / 840 MHz / 55 C / SwPowerCap
+```
+
+So: High performance scheme active, overlay maxed, on mains, card cool at 55 C, sole GPU
+client — and still clamped to a quarter of its power budget. **The cause is the laptop's own
+firmware/EC sustained-power policy, which engages after two to three epochs of continuous load
+regardless of what software is running.** Killing ChatGPT.exe is still worth doing (it bought
+the highest clocks yet, for two epochs) but it is not the fix, and this project should stop
+treating it as one. A real fix would need the OEM power utility or a vendor BIOS setting —
+outside what an unattended session should touch.
+
+### S6-D-005 — stage 1 cut from 30 epochs to 20
+At 630 s/epoch, 30 epochs is 5.25 hours and leaves no room for stage 2, evaluation and the
+report. Cut to 20, which is still **12,700 gradient steps = 1.32x session 3's 9,600**, on 6.3x
+more varied data — so the comparison remains fair on optimisation budget.
+
+Done without losing the 3 completed epochs: at step 1,905 the cosine is only 5.6% through a
+20-epoch horizon, so resuming against the new total anneals correctly rather than distorting
+(checked before acting; this is the same manoeuvre session 2 used, and the opposite of the
+`--resume`-into-a-short-schedule trap that S6-D-002 avoids).
+```
+Resumed from epoch 3 (global_step=1905, best_psnr=22.3738, es_counter=1)  lr=1.98e-04
+```

@@ -76,9 +76,11 @@ scheduler:
 
 # ---- Training ----------------------------------------------
 training:
-  epochs: 30                   # 5,080 pairs = 635 steps/epoch, ~6.3x session 3's 100.
-                               # 30 union epochs ~= 190 UIEB-epochs of gradient steps, so this
-                               # is a LONGER exposure than session 3's 96 epochs, not shorter.
+  epochs: 20                   # 5,080 pairs = 635 steps/epoch. 20 epochs = 12,700 gradient
+                               # steps = 1.32x session 3's 9,600, on 6.3x more varied data.
+                               # Cut from 30 at epoch 3 (S6-D-004) once the firmware power
+                               # clamp re-engaged and epochs went 340s -> 630s; at 30 the run
+                               # would have taken 5.25 h and left no slack for stage 2.
   seed: 42
   amp: true                    # Automatic Mixed Precision
   grad_clip_norm: 1.0          # max gradient norm
