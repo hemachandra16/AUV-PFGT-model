@@ -1310,3 +1310,47 @@ Initialising weights from: checkpoints/_stage1_union.pt (fresh optimizer and LR 
 Fine-tune mode: starting at epoch 0, step 0, lr=2.00e-05
 ```
 No `Resumed` line, confirming the fresh schedule S6-D-002 called for.
+
+### Stage 2 result — fine-tune complete
+```
+Early stopping triggered: PSNR did not improve for 12 validation rounds.
+Training complete. Best PSNR: 25.0639     (best epoch 9, 21 epochs run)
+Held-out fp32: PSNR 25.3336  SSIM 0.9262  UIQM 10.0170  UCIQE 0.3138
+```
+
+## PHASE 4 — Evaluate and decide
+
+| Model | Pairs | Steps | PSNR | SSIM |
+|---|---|---|---|---|
+| Pre-fix baseline | 801 | ~11,500 | 25.114 | 0.9281 |
+| **Session 3 — stays installed** | **801** | **9,600** | **25.364** | **0.9289** |
+| S6 stage 1 (union) | 5,080 | 9,525 | 24.806 | 0.9177 |
+| S6 stage 2 (union + UIEB FT) | 5,080 -> 801 | 9,525 + 900 | 25.334 | 0.9262 |
+
+stage 2 vs session 3: **-0.031 dB / -0.0027 SSIM**. The fine-tune recovered +0.528 dB of
+stage 1's deficit but did not clear the bar. **Decision: session 3's checkpoint stays installed**
+(md5-verified untouched — the stage runs wrote to `_stage1/` and `_stage2/` subdirectories), and
+`configs/train.yaml` is left alone so it still reproduces the installed model.
+
+### S6-D-007 — the mitigation was aimed at a risk that never fired  [THE FINDING]
+The two-stage design existed solely to defuse the feasibility report's style-mismatch warning.
+Measured on the held-out 89:
+
+| | R/B | distance from UIEB's target 0.779 |
+|---|---|---|
+| session 3 (UIEB only) | 0.802 | 0.023 |
+| **stage 1 (union, NO fine-tune)** | **0.780** | **0.001** |
+| stage 2 (union + UIEB FT) | 0.771 | 0.007 |
+| LSUI GT (the other convention) | 0.857 | — |
+
+**Training on the union did not drift the model warm.** It produced *better* colour calibration
+than session 3 — 0.001 from target versus 0.023, an order of magnitude closer. And stage 2's
+fine-tune moved calibration slightly *away* (0.001 -> 0.007) while gaining 0.53 dB, so whatever
+the fine-tune fixed, it was not colour.
+
+So stage 1's 0.56 dB deficit has a different cause. The leading candidate is **exposure, not
+step count**: at step-parity each UIEB image was seen ~15 times instead of session 3's ~96.
+Step-parity is not exposure-parity, and that is directly testable (report §5).
+
+Recording this as the session's main result. A small win would have been less informative than
+ruling out the explanation everyone expected — including the feasibility report, and me.
