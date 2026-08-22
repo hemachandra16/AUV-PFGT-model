@@ -1442,3 +1442,26 @@ rules it out: the GPU runs under a firmware power clamp (S6-D-004) at ~145 s/epo
 UIEB-only run, so one ~96-epoch arm is ~3.8 h and three arms ~11.5 h. This session was scoped to
 be well under overnight length. **Attribution across session 3's six bundled changes therefore
 remains untested**, and the report says exactly that rather than implying an answer.
+
+### Phase 4 — canonical report content (2026-08-22)
+
+Wrote `docs/report_content.md`: the single source both the website (Phase 5) and the PDF
+(Phase 6) render from, so the two artefacts cannot drift apart. Nine sections covering the
+eight the brief required, plus a standalone section 6 for the enhancement-vs-detection result
+(it was large enough to bury inside "results").
+
+**S7-D-005 — the novelty section was moved across verbatim in substance, not softened.**
+The brief said to state Phase 1's verdict "exactly as honestly as it was written there". The
+report's §7 opens on the same sentence the assessment does — *none of this project's
+architectural ideas are novel* — keeps the named prior work rather than gesturing at "related
+work", keeps the recommendation that `docs/math.md`'s "core novelty" claim be rewritten, and
+keeps the explicit refusal to claim the oracle-vs-achievable decomposition as novel. The one
+addition is the closing line that a project can be legitimate without being novel, which is a
+framing statement, not a weakening of the verdict.
+
+**S7-D-006 — the published-benchmark table carries its disclaimer inline, not in a footnote.**
+25.364 dB sits above U-shape Transformer's 22.91 in the same table, which is exactly the kind
+of juxtaposition a reader takes as a win. The paragraph immediately under the table states that
+it must not be read that way, and why: different split, self-chosen, and a 2.3 M-parameter
+model beating a published transformer by 2.4 dB is better evidence of an easy split than a
+good method. The website and PDF must both keep that paragraph adjacent to the table.
