@@ -92,6 +92,26 @@ def load_uieb():
     return out
 
 
+def iter_lsui_dir():
+    """Scan the EXTRACTED LSUI directory -- i.e. the exact files training would consume.
+
+    Checking the zip proves the archive is clean; checking the laid-out directory proves the
+    thing that will actually be fed to the model is clean. They should agree, but the second
+    is the one that matters operationally, so it is what the training gate uses.
+    """
+    d = ROOT / "datasets" / "LSUI" / "input"
+    if not d.exists():
+        return
+    for p in sorted(d.iterdir()):
+        if p.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+            continue
+        try:
+            with Image.open(p) as im:
+                yield f"LSUI/input/{p.name}", im.convert("RGB")
+        except Exception:
+            continue
+
+
 def iter_lsui():
     zpath = PROBE / "LSUI.zip"
     if not zpath.exists():
@@ -198,14 +218,22 @@ def main() -> None:
 
     out_dir = PROBE / "leak_candidates"
     results = {}
-    results["LSUI"] = scan("LSUI", iter_lsui(), uieb, out_dir)
-    print()
-    results["EUVP"] = scan("EUVP", iter_euvp(), uieb, out_dir)
+
+    # Default: gate the EXTRACTED directory, which is what training consumes.
+    # --zip additionally re-checks the source archive; --euvp adds the EUVP probe.
+    if (ROOT / "datasets" / "LSUI" / "input").exists() and "--zip" not in sys.argv:
+        results["LSUI(dir)"] = scan("LSUI(dir)", iter_lsui_dir(), uieb, out_dir)
+    else:
+        results["LSUI(zip)"] = scan("LSUI(zip)", iter_lsui(), uieb, out_dir)
+    if "--euvp" in sys.argv:
+        print()
+        results["EUVP"] = scan("EUVP", iter_euvp(), uieb, out_dir)
 
     print()
     print("=" * 78)
     print("VERDICT")
     print("=" * 78)
+    gate_ok = all(r["held_strict"] == 0 for r in results.values())
     for k, r in results.items():
         verdict = ("CLEAN" if r["held_strict"] == 0 else "LEAK RISK")
         print(f"  {k:<6} scanned {r['scanned']:>5}  closest {r['closest']:>2} bits  "

@@ -1116,3 +1116,67 @@ The intervention was correctly designed, correctly verified, and net negative. T
 worth keeping is the one measured before the run: **the +3.2 dB that has been quoted since
 session 3 — by me — is an oracle bound, and only 24.4% of it was ever reachable.** Retiring a
 wrong target is worth more than another 0.1 dB.
+
+---
+---
+
+# SESSION 6 — 2026-08-22 — LSUI union pretrain -> UIEB fine-tune
+
+**Question:** does more/varied training data help this architecture? Single variable: training
+data. Everything else (model, loss, split, evaluation) held fixed.
+
+## PHASE 0 — Fetch, lay out, gate
+- [x] 0.1 Clean tree at `06a6e38`; backed up to `checkpoints/_session6_backup/` (md5 `e36a4fd1…`)
+- [x] 0.2 **ChatGPT.exe: 10 processes found and force-killed** (S6-D-001)
+- [x] 0.3 LSUI laid out from the already-verified archive
+- [x] 0.4 **LEAK GATE: PASS**
+- [x] 0.5 Held-out split asserted identical to prior sessions
+- [x] 0.6 Commit
+
+### S6-D-001 — ChatGPT.exe, standing authorization exercised
+Per this session's standing instruction, checked for the GPU co-client that has throttled every
+prior run. Found **ten** processes (PIDs 2352, 5468, 20692, 21404, 21708, 22300, 22436, 23580,
+27412, 27876) despite no visible window. `CloseMainWindow()` did not clear them, so
+`taskkill /IM ChatGPT.exe /F` was used. Afterwards `nvidia-smi --query-compute-apps` returns
+**empty** and the power scheme is still High performance. This will be re-checked at every
+watchdog check-in, per instruction.
+
+### LSUI layout
+Reused `_dsprobe/LSUI.zip` from the feasibility session rather than re-downloading — verified
+first: size 492,658,225 bytes (matches the recorded figure) and `testzip()` reports no corrupt
+entries. Extracted with an `lsui_` prefix:
+```
+extracted: input=4279  GT=4279
+filename intersection (what dataset.py pairs on): 4279
+unpaired : input-only=0  GT-only=0        -> PASS: perfect 1:1 pairing
+```
+Spot-checked pairs are a genuine enhancement direction (cast 0.505 -> 0.013, 1.003 -> 0.006).
+498 MB on disk, inside the gitignored `datasets/`.
+
+### The hard gate — run against the EXTRACTED directory, not the archive
+The tool previously scanned `LSUI.zip`. Checking the archive proves the archive is clean;
+checking the laid-out directory proves *the files training will actually open* are clean. Added
+a directory mode and an explicit exit-code gate, then ran it:
+```
+scanned 4279 images
+closest dHash distance found anywhere : 1 bits
+strong hits within 6 bits   : 15  (of which held-out: 0)
+closest pair: LSUI/input/lsui_2061.jpg <-> 917_img_.png  1 bit  corr 0.995  [TRAIN split]
+LSUI(dir)  held-out strong hits: 0  -> CLEAN
+GATE EXIT CODE: 0
+```
+Same answer as the archive scan. The single 1-bit duplicate is against the *training* split,
+which is harmless, and its presence is useful: it shows the detector is live rather than
+trivially returning zero.
+
+### Held-out split unchanged — asserted, not assumed
+```
+train 801 / held-out 89
+first 8 held-out: ['708_img_.png','493_img_.png','497_img_.png','784_img_.png',
+                   '5554.png','287_img_.png','32_img_.png','573_img_.png']
+counts match prior sessions : True
+first-8 identical to session 1 : True
+train and held-out disjoint : True
+SHA256 of held-out list: 0084cf26790978cd5f7ef60ffb958a55ac53892c3dc5773098ff78de5d92a67e
+```
+The SHA is recorded so future sessions can assert against one value instead of eyeballing.
