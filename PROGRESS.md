@@ -1412,3 +1412,33 @@ of 89 images**, not the community's standard Test-U90/C90. Different image sets,
 difficulty varies enormously. A 2.3 M-parameter model beating a published transformer by 2.4 dB
 almost certainly reflects an easier split, not a better method. The report presents this as
 context and explicitly refuses the "we beat X" reading.
+
+## PHASE 2 — Detection visual proof -> `outputs/detection_proof.html`
+Companion to `session4_proof.html`. Ten held-out RUOD frames, human-marked answer beside the
+detector's output, chosen to cover the three strongest classes (cuttlefish 0.965, turtle 0.965,
+diver 0.929) **and** the three weakest (corals 0.694, scallop 0.714, holothurian 0.751), so the
+page cannot flatter the model by construction.
+
+### S7-D-003 — the mAP framing was checked before being written
+"mAP@0.5 = 0.83" is easy to mis-state as "83% correct", which is wrong — mAP is the mean over
+classes of the area under the precision–recall curve at IoU ≥ 0.5, not an accuracy. The page
+says so explicitly and gives the two numbers a non-expert can actually interpret: recall 0.756
+("finds about three-quarters of the animals present") and precision 0.839 ("about five in six of
+its boxes are real").
+
+### S7-D-004 — one frame revealed the benchmark, not the model, and the page now says so
+Frame `003850.jpg` scored terribly by the raw count: 1 labelled object, 28 predictions, 27
+"false alarms". Inspecting it showed the detector had correctly found the turtle at 82% **and**
+27 fish in the background that are plainly there and that the human labeller simply did not
+mark. Scoring that as failure would have been wrong, and any reader looking at the picture would
+have seen the page was wrong. Added logic that detects this case — extra boxes concentrated in a
+class the reference does not label at all — and says plainly that it is *"a limitation of the
+benchmark rather than of the detector"*. Kept the frame in rather than swapping it out; it is
+the most instructive image on the page.
+
+## PHASE 3 — Session-3 six-change ablation: SKIPPED, and why
+Explicitly lower priority than the report/site/PDF in this session's brief, and the arithmetic
+rules it out: the GPU runs under a firmware power clamp (S6-D-004) at ~145 s/epoch for a
+UIEB-only run, so one ~96-epoch arm is ~3.8 h and three arms ~11.5 h. This session was scoped to
+be well under overnight length. **Attribution across session 3's six bundled changes therefore
+remains untested**, and the report says exactly that rather than implying an answer.
