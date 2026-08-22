@@ -1354,3 +1354,61 @@ Step-parity is not exposure-parity, and that is directly testable (report §5).
 
 Recording this as the session's main result. A small win would have been less informative than
 ruling out the explanation everyone expected — including the feasibility report, and me.
+
+---
+---
+
+# SESSION 7 — 2026-08-22 — Honest positioning, report, website, PDF
+
+No training, no architecture changes. Making six sessions of work legible, honest and
+presentable, with real literature grounding.
+
+## PHASE 0 — State check
+- [x] Clean tree at `7fcbaff`; best.pt = session 3's model (epoch 76); detector mAP@0.5 = 0.8292
+- [x] ChatGPT.exe absent; GPU idle
+
+## PHASE 1 — Novelty assessment -> `docs/novelty_assessment.md`
+
+### S7-D-001 — the honest verdict: nothing here is architecturally novel
+Searched 2023-2026 literature and read candidates closely enough to compare *mechanisms*, not
+titles. All three of this project's supposed contributions are already published:
+
+**Physics-guided attention.** Sanchez-Ferreira et al. (J. Imaging 12(5):186) encode a physical
+prior as "a spatial bias matrix that directly modulates attention affinity" — the same mechanism
+class as this project's `Softmax(QKᵀ/√d + λP)V`, for underwater deblurring. PCAFA-Net (Sensors
+2025), PGANet (Comput. Electr. Eng. 2025), SFormer (arXiv:2508.18664), physical-guided
+transformer interaction (Displays 2023) and a physics-aware diffusion transformer
+(arXiv:2403.01497) all occupy the same space. **`docs/math.md` calls this "the core novelty of
+the proposed method"; that claim is not supportable and should be rewritten.**
+
+**Wavelet/frequency-split transformer for UIE.** MixRformer (Sensors 25(11):3302) is a
+dual-branch wavelet-domain UIE network — structurally the same idea. U-ENHANCE (ACCV 2024 W),
+a Mamba spectral-attentive wavelet net (EAAI 2024), WEDM and WWE-UIE all do wavelet+attention
+for UIE. Standard practice in this subfield.
+
+**Enhancement hurts detection.** Awad et al., *Beneath the Surface* (arXiv:2411.14626, 2024) ran
+**nine** enhancement models x **two** datasets x **three** detectors, **including retraining
+detectors on enhanced data**, and found enhancement harms detection at dataset level while
+helping individual images. That is the larger version of session 2's experiment, published
+first. Session 2's result is a faithful **reproduction**, not a discovery, and will be presented
+as such.
+
+### What survives as contribution
+1. **The correctness fix and its falsification methodology** — the strongest item. The original
+   attention had no Q/K/V projections, making it provably incapable of a global colour shift
+   (`verify_attention.py`: MSE 9.000 = 3.0², output mean unmoved). Diagnosing that and proving
+   it by falsification is real engineering rigour; the fixed module itself is textbook attention.
+2. **Controlled negative results** — attention fix didn't move PSNR; `L_dc` made it worse; 6.3x
+   data didn't help; the predicted colour-style mismatch never occurred.
+3. **Flagged but NOT claimed:** session 4's oracle-vs-achievable decomposition (only 24.4% of
+   the apparent colour headroom is reachable, because UIEB references are human-retouched and
+   the offset is weakly predictable, held-out R² 0.015/0.104/0.346). Not found in the searches
+   run, but "I didn't find it" is weak evidence and it is recorded as needing a proper check.
+
+### S7-D-002 — our 25.364 dB is NOT comparable to published UIEB numbers
+Published Test-U90 figures: WaterNet 19.81, FUnIE 19.45, UGAN 20.68, Ucolor 20.78, U-shape
+Transformer 22.91/0.91; PCAFA-Net 22.80/0.890 on UIEB. Our 25.364 is on **our own seed-42 split
+of 89 images**, not the community's standard Test-U90/C90. Different image sets, and UIEB
+difficulty varies enormously. A 2.3 M-parameter model beating a published transformer by 2.4 dB
+almost certainly reflects an easier split, not a better method. The report presents this as
+context and explicitly refuses the "we beat X" reading.
