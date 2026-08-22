@@ -34,3 +34,6 @@ _archive/
 
 # Ultralytics runs
 runs/
+
+# Dataset-expansion feasibility probe (session 5) — ~680 MB of candidate data
+_dsprobe/
