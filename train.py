@@ -93,7 +93,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=None,
                         help="Override learning rate from config")
     parser.add_argument("--resume", type=str, default=None,
-                        help="Path to checkpoint to resume training from")
+                        help="Path to checkpoint to resume an INTERRUPTED run from. Restores "
+                             "model, optimizer, scaler, epoch and global_step, so the LR "
+                             "schedule continues where it left off.")
+    parser.add_argument("--init-from", type=str, default=None,
+                        help="Initialise MODEL WEIGHTS ONLY from a checkpoint and start a fresh "
+                             "run (epoch 0, step 0, new optimizer, new LR schedule). This is "
+                             "what fine-tuning needs: --resume would inherit the previous run's "
+                             "global_step, and since the LR is computed as global_step/"
+                             "total_steps, a short fine-tune schedule would be driven past its "
+                             "end and swing the LR back up toward base_lr.")
     parser.add_argument("--checkpoint-dir", type=str, default=None,
                         help="Override checkpoint directory from config")
     parser.add_argument("--debug-mode", action="store_true",
@@ -344,6 +353,16 @@ def main() -> None:
     start_epoch = 0
     best_metric = 0.0
     es_counter = 0
+
+    if args.init_from is not None and args.resume is not None:
+        raise SystemExit("--init-from and --resume are mutually exclusive: the first starts a "
+                         "fresh schedule, the second continues an existing one.")
+
+    if args.init_from is not None:
+        logger.info("Initialising weights from: %s (fresh optimizer and LR schedule)",
+                    args.init_from)
+        load_checkpoint(args.init_from, model=model, device=device)
+        logger.info("Fine-tune mode: starting at epoch 0, step 0, lr=%.2e", base_lr)
 
     if args.resume is not None:
         logger.info("Resuming from checkpoint: %s", args.resume)

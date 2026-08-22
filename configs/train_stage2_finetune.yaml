@@ -1,0 +1,104 @@
+# ============================================================
+# PFGT-UIE Training Configuration
+# ============================================================
+# All values here are used as defaults; CLI args override them.
+
+# ============================================================
+# SESSION 6 STAGE 2 — fine-tune the stage-1 model back to UIEB's colour convention
+# ============================================================
+# Launch with:  --init-from checkpoints/_stage1/best.pt   (NOT --resume: see train.py)
+#
+# No extra_train_sources here on purpose. The feasibility report measured that LSUI's
+# references are warmer than UIEB's (R/B 0.967 vs 0.807), and session 4 established that a
+# large part of UIEB's reference colour is the retoucher's convention rather than a recoverable
+# property of the input. So the model finishes on UIEB alone, which is what the held-out set
+# actually scores.
+#
+# ---- Dataset -----------------------------------------------
+dataset:
+  root_dir: null               # null = auto-detect (project root)
+  raw_dir: null                # null = <root>/datasets/UIEB/raw-890
+  reference_dir: null          # null = <root>/datasets/UIEB/reference-890
+  image_size: 256
+
+# ---- DataLoader --------------------------------------------
+dataloader:
+  batch_size: 8
+  num_workers: 2
+  pin_memory: true
+  train_split: 0.9             # 90% train, 10% validation
+
+# ---- Model -------------------------------------------------
+model:
+  embed_dim: 128
+  num_heads: 4
+  context_dim: 64             # width of the image-global physics context vector
+  low_mlp_ratio: 4            # LL branch carries 97.3% of the residual error
+  high_mlp_ratio: 2           # was effectively 4; its FFN was 43.3% of the whole model
+  use_global_correction: true # per-image colour affine; oracle headroom +3.20 dB
+  use_physics_priors: true    # closed-form dark/bright channel + global colour stats
+
+# ---- Loss weights ------------------------------------------
+# L_total = lambda_l1*L1 + lambda_perceptual*L_perc + lambda_ssim*L_SSIM
+#           + lambda_frequency*L_freq        (docs/math.md section 8)
+loss:
+  lambda_l1: 1.0
+  lambda_ssim: 0.5
+  lambda_perceptual: 0.1
+  lambda_dc: 0.0               # TESTED IN SESSION 4 AND TURNED OFF AGAIN.
+                               # Direct supervision of the per-image per-channel mean, added
+                               # to make GlobalColorCorrection do its job. It did not work:
+                               # held-out PSNR 25.364 -> 24.982 (-0.382 dB) while the oracle
+                               # headroom barely moved (+3.358 -> +3.192) and the module's
+                               # per-image variation did not increase.
+                               # Root cause, measured BEFORE the run: the needed offset is
+                               # only weakly predictable from the input (held-out ridge
+                               # R^2 = 0.015/0.104/0.346), because the UIEB references are
+                               # human-retouched. A stronger loss cannot create information
+                               # that is not in the input. Set to 0 so this config reproduces
+                               # the installed checkpoint. See FINAL_REPORT_SESSION4.md.
+  lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
+                               # the LL band, i.e. a duplicate of L1 at 0.15 weight
+                               # contributing 3.3% of the objective. See PROGRESS.md F4.
+
+# ---- Optimizer ---------------------------------------------
+optimizer:
+  lr: 2.0e-5                   # 10x lower than from-scratch. This is a re-calibration of an
+                               # already-converged model, not fresh training: a full-rate LR
+                               # would wash out the representations learned from 6.3x the data,
+                               # while a much smaller one would not move the colour calibration
+                               # at all.
+  weight_decay: 1.0e-4
+  betas: [0.9, 0.999]
+
+# ---- LR Schedule -------------------------------------------
+scheduler:
+  warmup_epochs: 1             # minimal: the model is already converged
+  eta_min: 1.0e-6              # cosine annealing floor
+  # NOTE: `total_epochs` was removed here — it was never read; the schedule length
+  # comes from `training.epochs` below.
+
+# ---- Training ----------------------------------------------
+training:
+  epochs: 40                   # 801 pairs = 100 steps/epoch; short by design
+  seed: 42
+  amp: true                    # Automatic Mixed Precision
+  grad_clip_norm: 1.0          # max gradient norm
+  log_every_steps: 10          # print/TensorBoard every N steps
+  save_every_epochs: 10        # save checkpoints/epoch_N.pt every N epochs (extra recovery points)
+
+# ---- Early Stopping ----------------------------------------
+early_stopping:
+  enabled: true
+  patience: 12                 # a fine-tune should show its effect quickly
+  metric: "psnr"               # monitored metric; "psnr" or "ssim" (higher = better)
+  min_delta: 0.01              # minimum improvement to reset patience
+
+# ---- Checkpoints -------------------------------------------
+checkpoint:
+  dir: checkpoints/_stage2
+
+# ---- Logging -----------------------------------------------
+logging:
+  log_dir: logs
+  tensorboard_dir: logs/tensorboard

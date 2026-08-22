@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 
 
 class UIEBDataset(Dataset[Tuple[torch.Tensor, torch.Tensor]]):
@@ -153,7 +153,8 @@ def get_splits(
     train_split: Optional[float] = None,
     seed: int = 42,
     augment_train: bool = True,
-) -> Tuple[Subset, Subset]:
+    extra_train_sources: Optional[Sequence[dict]] = None,
+) -> Tuple[object, Subset]:
     """Return the project's canonical (train, validation) split of the UIEB dataset.
 
     This is the SINGLE definition of the split. It reproduces exactly what ``train.py``
@@ -177,8 +178,16 @@ def get_splits(
         augment_train: Whether the training subset applies augmentation. The validation
             subset is never augmented.
 
+        extra_train_sources: Optional list of ``{raw_dir, reference_dir}`` dicts appended to
+            the TRAINING pool only (session 6: LSUI). The validation subset is built solely
+            from the UIEB split above and is never touched by these, so held-out numbers
+            stay comparable to every prior session. Each extra source is paired by filename
+            exactly like UIEB.
+
     Returns:
-        ``(train_subset, val_subset)`` — both ``torch.utils.data.Subset`` objects.
+        ``(train_pool, val_subset)``. ``train_pool`` is a ``Subset`` when no extra sources
+        are given, or a ``ConcatDataset`` when they are; ``val_subset`` is always a
+        ``Subset`` of UIEB.
     """
     config = config or {}
     ds_cfg = config.get("dataset", {}) or {}
@@ -189,6 +198,8 @@ def get_splits(
     reference_dir = reference_dir if reference_dir is not None else ds_cfg.get("reference_dir")
     image_size = image_size if image_size is not None else ds_cfg.get("image_size", 256)
     train_split = train_split if train_split is not None else dl_cfg.get("train_split", 0.9)
+    if extra_train_sources is None:
+        extra_train_sources = ds_cfg.get("extra_train_sources") or []
 
     if not 0.0 < train_split < 1.0:
         raise ValueError(f"train_split must be in (0, 1), got {train_split}.")
@@ -210,9 +221,43 @@ def get_splits(
     indices = torch.randperm(n_total, generator=generator).tolist()
     train_indices, val_indices = indices[:n_train], indices[n_train:]
 
-    return Subset(train_base, train_indices), Subset(val_base, val_indices)
+    train_pool = Subset(train_base, train_indices)
+    val_subset = Subset(val_base, val_indices)
+
+    if extra_train_sources:
+        parts = [train_pool]
+        for src in extra_train_sources:
+            extra = UIEBDataset(
+                raw_dir=src["raw_dir"],
+                reference_dir=src["reference_dir"],
+                image_size=image_size,
+                augment=augment_train,
+            )
+            parts.append(extra)
+        train_pool = ConcatDataset(parts)
+
+    return train_pool, val_subset
 
 
-def subset_pair_names(subset: Subset) -> list[str]:
-    """Filenames backing a Subset produced by :func:`get_splits`, in iteration order."""
-    return [subset.dataset.pairs[i][0].name for i in subset.indices]
+def pool_pair_names(pool) -> list[str]:
+    """Every filename in a training pool, whether it is a Subset or a ConcatDataset.
+
+    Used to prove programmatically that no held-out image has entered the training pool.
+    """
+    if isinstance(pool, ConcatDataset):
+        names: list[str] = []
+        for d in pool.datasets:
+            names.extend(pool_pair_names(d))
+        return names
+    if isinstance(pool, Subset):
+        return [pool.dataset.pairs[i][0].name for i in pool.indices]
+    return [p[0].name for p in pool.pairs]
+
+
+def subset_pair_names(subset) -> list[str]:
+    """Filenames backing a split from :func:`get_splits`, in iteration order.
+
+    Delegates to :func:`pool_pair_names` so it keeps working if a ConcatDataset training
+    pool is passed in (callers such as validate.py --split train do this).
+    """
+    return pool_pair_names(subset)

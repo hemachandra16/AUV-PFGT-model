@@ -1180,3 +1180,48 @@ train and held-out disjoint : True
 SHA256 of held-out list: 0084cf26790978cd5f7ef60ffb958a55ac53892c3dc5773098ff78de5d92a67e
 ```
 The SHA is recorded so future sessions can assert against one value instead of eyeballing.
+
+## PHASE 1 — Two-stage training pools
+- [x] 1.1 `data/dataset.py::get_splits()` gained `extra_train_sources` (additive, minimal)
+- [x] 1.2 Two stage configs written
+- [x] 1.3 Both pools verified programmatically before launching anything
+
+```
+stage-1 UNION pool     : 5080 pairs  (801 UIEB + 4279 LSUI)
+stage-2 FINE-TUNE pool : 801 pairs
+held-out (both stages) : 89 / 89
+validation set identical across stages : True
+held-out leaked into stage-1 pool      : 0
+held-out leaked into stage-2 pool      : 0
+duplicate filenames within union pool  : 0
+```
+Pairs load correctly from *both* halves of the concatenated pool (checked indices 0, 400, 801
+and 5079, plus a shuffled DataLoader batch spanning the boundary).
+
+### S6-D-002 — `--init-from` added, because `--resume` would have wrecked the fine-tune
+Stage 2 starts from stage 1's weights. The obvious way to do that is `--resume`, and it would
+have quietly ruined the run: `--resume` restores `global_step`, and `train.py` computes the LR
+as a cosine over `global_step / total_steps`. Stage 1 ends near step 19,050 while stage 2's
+schedule is only 4,000 steps long, so the cosine would be driven far past its end and oscillate
+back **up**:
+```
+step 19050 -> cosine progress 7.4 -> lr 7.58e-05
+step 20000 -> cosine progress 7.8 -> lr 1.81e-04     (base_lr is 2.00e-04)
+```
+A "fine-tune" that silently runs at 90% of the from-scratch learning rate would have destroyed
+the point of the exercise, and the symptom — a bad stage-2 number — would have looked like
+"the mitigation doesn't work" rather than "the LR was wrong".
+
+So `--init-from` loads **model weights only** and starts a genuinely fresh run (epoch 0, step 0,
+new optimizer, new schedule). The two flags are mutually exclusive and the code says why.
+
+### S6-D-003 — stage hyper-parameters, and why
+**Stage 1 (union):** 30 epochs, not 150. At 5,080 pairs an epoch is 635 steps versus session 3's
+100, so **30 union epochs is about 190 UIEB-epochs' worth of gradient steps** — a *longer*
+exposure than session 3's 96 epochs, not a shorter one. Warmup 2 epochs (1,270 steps),
+patience 10.
+
+**Stage 2 (fine-tune):** lr **2.0e-5**, ten times lower than from-scratch. The job is
+re-calibrating an already-converged model toward UIEB's colour convention: a full-rate LR would
+wash out the representations learned from 6.3x the data, and a much smaller one would not shift
+the calibration at all. 40 epochs of 100 steps, warmup 1, patience 12.

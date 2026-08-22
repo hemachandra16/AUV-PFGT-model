@@ -1,0 +1,102 @@
+# ============================================================
+# PFGT-UIE Training Configuration
+# ============================================================
+# All values here are used as defaults; CLI args override them.
+
+# ============================================================
+# SESSION 6 STAGE 1 — pretrain on UIEB-train + LSUI (5,080 pairs)
+# ============================================================
+# Single variable vs session 3: the training data. Model, loss and evaluation are unchanged.
+# The held-out 89 UIEB images are NOT in this pool (asserted; leak gate passed).
+#
+# ---- Dataset -----------------------------------------------
+dataset:
+  # Appended to the TRAINING pool only. Validation stays pure UIEB so held-out numbers remain
+  # comparable to sessions 1-5.
+  extra_train_sources:
+    - raw_dir: datasets/LSUI/input
+      reference_dir: datasets/LSUI/GT
+  root_dir: null               # null = auto-detect (project root)
+  raw_dir: null                # null = <root>/datasets/UIEB/raw-890
+  reference_dir: null          # null = <root>/datasets/UIEB/reference-890
+  image_size: 256
+
+# ---- DataLoader --------------------------------------------
+dataloader:
+  batch_size: 8
+  num_workers: 2
+  pin_memory: true
+  train_split: 0.9             # 90% train, 10% validation
+
+# ---- Model -------------------------------------------------
+model:
+  embed_dim: 128
+  num_heads: 4
+  context_dim: 64             # width of the image-global physics context vector
+  low_mlp_ratio: 4            # LL branch carries 97.3% of the residual error
+  high_mlp_ratio: 2           # was effectively 4; its FFN was 43.3% of the whole model
+  use_global_correction: true # per-image colour affine; oracle headroom +3.20 dB
+  use_physics_priors: true    # closed-form dark/bright channel + global colour stats
+
+# ---- Loss weights ------------------------------------------
+# L_total = lambda_l1*L1 + lambda_perceptual*L_perc + lambda_ssim*L_SSIM
+#           + lambda_frequency*L_freq        (docs/math.md section 8)
+loss:
+  lambda_l1: 1.0
+  lambda_ssim: 0.5
+  lambda_perceptual: 0.1
+  lambda_dc: 0.0               # TESTED IN SESSION 4 AND TURNED OFF AGAIN.
+                               # Direct supervision of the per-image per-channel mean, added
+                               # to make GlobalColorCorrection do its job. It did not work:
+                               # held-out PSNR 25.364 -> 24.982 (-0.382 dB) while the oracle
+                               # headroom barely moved (+3.358 -> +3.192) and the module's
+                               # per-image variation did not increase.
+                               # Root cause, measured BEFORE the run: the needed offset is
+                               # only weakly predictable from the input (held-out ridge
+                               # R^2 = 0.015/0.104/0.346), because the UIEB references are
+                               # human-retouched. A stronger loss cannot create information
+                               # that is not in the input. Set to 0 so this config reproduces
+                               # the installed checkpoint. See FINAL_REPORT_SESSION4.md.
+  lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
+                               # the LL band, i.e. a duplicate of L1 at 0.15 weight
+                               # contributing 3.3% of the objective. See PROGRESS.md F4.
+
+# ---- Optimizer ---------------------------------------------
+optimizer:
+  lr: 2.0e-4
+  weight_decay: 1.0e-4
+  betas: [0.9, 0.999]
+
+# ---- LR Schedule -------------------------------------------
+scheduler:
+  warmup_epochs: 2             # 2 union epochs = 1,270 warmup steps
+  eta_min: 1.0e-6              # cosine annealing floor
+  # NOTE: `total_epochs` was removed here — it was never read; the schedule length
+  # comes from `training.epochs` below.
+
+# ---- Training ----------------------------------------------
+training:
+  epochs: 30                   # 5,080 pairs = 635 steps/epoch, ~6.3x session 3's 100.
+                               # 30 union epochs ~= 190 UIEB-epochs of gradient steps, so this
+                               # is a LONGER exposure than session 3's 96 epochs, not shorter.
+  seed: 42
+  amp: true                    # Automatic Mixed Precision
+  grad_clip_norm: 1.0          # max gradient norm
+  log_every_steps: 10          # print/TensorBoard every N steps
+  save_every_epochs: 10        # save checkpoints/epoch_N.pt every N epochs (extra recovery points)
+
+# ---- Early Stopping ----------------------------------------
+early_stopping:
+  enabled: true
+  patience: 10                 # scaled down with the shorter epoch count
+  metric: "psnr"               # monitored metric; "psnr" or "ssim" (higher = better)
+  min_delta: 0.01              # minimum improvement to reset patience
+
+# ---- Checkpoints -------------------------------------------
+checkpoint:
+  dir: checkpoints/_stage1
+
+# ---- Logging -----------------------------------------------
+logging:
+  log_dir: logs
+  tensorboard_dir: logs/tensorboard
