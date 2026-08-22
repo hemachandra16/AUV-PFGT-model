@@ -1285,3 +1285,28 @@ Its own command line contained the literal string `train.py` (inside the regex),
 Same self-matching class of bug the process census caught in session 2. Fixed by killing the
 known PID explicitly rather than pattern-matching. Noting it because it silently produced a
 half-applied state that looked, from the exit code alone, like the edit had happened.
+
+### Stage 1 result — union pretrain complete
+```
+Training complete. Best PSNR: 24.4729      (15/15 epochs, 9,525 steps, no early stop)
+Best checkpoint: checkpoints/_stage1/best.pt -> copied to checkpoints/_stage1_union.pt
+Held-out fp32: PSNR 24.8060  SSIM 0.9177  UIQM 9.8685  UCIQE 0.3126
+```
+Validation trajectory: 22.40 → 22.37 → 22.07 → 22.19 → 23.25 → 22.49 → 23.70 → 23.94 → 23.73
+→ 24.01 → 24.38 → 24.43 → 24.44 → **24.47**. Still climbing at the horizon — it did not early-stop
+and had not plateaued, so this figure is a floor, not a converged value.
+
+**24.806 dB, versus session 3's 25.364 on the same held-out 89.** Training on 6.3x more data,
+at matched gradient steps, is currently **0.56 dB worse**. That is exactly what the feasibility
+report's style-mismatch warning predicted would happen without the mitigation, which is what
+stage 2 now tests.
+
+## PHASE 3 — Stage 2: fine-tune back to UIEB
+Launched from stage-1 weights with `--init-from` (not `--resume`), UIEB-train alone, lr 2.0e-5:
+```
+Config: epochs=40  bs=8  lr=2.00e-05
+Dataset split: 801 train / 89 validation images
+Initialising weights from: checkpoints/_stage1_union.pt (fresh optimizer and LR schedule)
+Fine-tune mode: starting at epoch 0, step 0, lr=2.00e-05
+```
+No `Resumed` line, confirming the fresh schedule S6-D-002 called for.
