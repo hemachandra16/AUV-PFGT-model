@@ -1260,15 +1260,28 @@ the highest clocks yet, for two epochs) but it is not the fix, and this project 
 treating it as one. A real fix would need the OEM power utility or a vendor BIOS setting —
 outside what an unattended session should touch.
 
-### S6-D-005 — stage 1 cut from 30 epochs to 20
-At 630 s/epoch, 30 epochs is 5.25 hours and leaves no room for stage 2, evaluation and the
-report. Cut to 20, which is still **12,700 gradient steps = 1.32x session 3's 9,600**, on 6.3x
-more varied data — so the comparison remains fair on optimisation budget.
+### S6-D-005 — stage 1 cut 30 -> 20 -> 15 epochs, landing on step-parity
+Epoch time kept degrading as the clamp tightened — 340 s, then 629 s, then 953 s — so the
+horizon was cut twice. It settled at **15 epochs = 9,525 gradient steps**, which is
+**step-parity with session 3's 9,600** (96 x 100).
 
-Done without losing the 3 completed epochs: at step 1,905 the cosine is only 5.6% through a
-20-epoch horizon, so resuming against the new total anneals correctly rather than distorting
-(checked before acting; this is the same manoeuvre session 2 used, and the opposite of the
-`--resume`-into-a-short-schedule trap that S6-D-002 avoids).
+That is not a compromise, it is the better experiment. Identical optimisation budget, 6.3x more
+varied data: any difference in the result is attributable to the *data*, not to compute. The
+earlier 20-epoch plan (1.32x the steps) would have confounded the two.
+
+No progress was lost either time: the cosine progress was checked against the new horizon
+*before* acting (5.6% at the first cut, 15.4% at the second), so the schedule re-anneals
+correctly instead of distorting. This is the manoeuvre session 2 used, and the opposite of the
+`--resume`-into-a-short-schedule trap S6-D-002 exists to avoid.
 ```
-Resumed from epoch 3 (global_step=1905, best_psnr=22.3738, es_counter=1)  lr=1.98e-04
+Resumed from epoch 4 (global_step=2540, best_psnr=22.0741, es_counter=2)
+Config: epochs=15   cosine progress 15.4% -> anneals correctly
 ```
+
+### S6-D-006 — a self-terminating kill script
+The script written to stop the trainer matched processes by a regex against their command line.
+Its own command line contained the literal string `train.py` (inside the regex), so it matched
+**itself** and died before editing anything — leaving the trainer running on the old config.
+Same self-matching class of bug the process census caught in session 2. Fixed by killing the
+known PID explicitly rather than pattern-matching. Noting it because it silently produced a
+half-applied state that looked, from the exit code alone, like the edit had happened.
