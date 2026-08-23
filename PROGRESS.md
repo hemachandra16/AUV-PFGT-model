@@ -1551,3 +1551,49 @@ orphaned or near-empty pages; figure numbering continuous 1–7. Text extraction
 load-bearing content survived into print — the novelty verdict verbatim, the "must not be read
 as" benchmark disclaimer, the untested-ablation admission, the UIQM caveat, the seed-42 split
 caveat, and the Awad et al. attribution — and that every results table reaches its final row.
+
+### Phase 7 — index and close-out (2026-08-22)
+
+`PROJECT_SUMMARY.md` created at the repository root as the single entry point: headline numbers,
+the two findings a reader should know before anything else, links to the website, the PDF and
+both proof pages, a table of all seven session reports with a one-line outcome each, the
+reference documents, the reproduction commands, and the four limitations that matter most.
+Every link target and every referenced script and config was checked to exist — 19 links, 8
+scripts, 3 configs, all resolving.
+
+Both builders were re-run from the repository root rather than from `tools/`, because that is
+what `PROJECT_SUMMARY.md` tells a reader to do, and a documented command that only works from
+the author's working directory is a broken command.
+
+**S7-D-011 — the repository was contradicting its own report, and that was fixed.**
+`README.md` opened with "PFGT-UIE is a **novel** deep learning architecture", labelled the
+attention module "(Core Novelty)" in three further places, and `docs/math.md` §5 asserted "this
+is the core novelty of the proposed method". Session 7's whole purpose is honest positioning;
+shipping a report that says *none of this project's architectural ideas are novel* while the
+front page of the repository says the opposite would have made the honesty cosmetic. Both files
+now state plainly that the mechanism is established prior work and point at
+`docs/novelty_assessment.md` for the citations. The README additionally notes what the project
+*does* offer — a working, verified implementation with real ablations — so the correction is
+accurate rather than merely self-deprecating.
+
+This was not in the Phase 7 brief. It is recorded here as a deliberate widening of scope, on
+the grounds that leaving it would have defeated the stated purpose of the session.
+
+---
+
+## Session 7 close-out
+
+**Delivered:** honest novelty assessment with real citations · detection visual proof ·
+canonical report content · website · 18-page PDF · root index · two unsupportable novelty
+claims retracted.
+
+**Not delivered, and stated plainly rather than implied away:** the session-3 six-change
+ablation (Phase 3) was skipped. Under the firmware power clamp one arm is ~3.8 h and three arms
+~11.5 h, which would have consumed the budget for the report, website and PDF that the brief
+ranked higher. **Attribution across session 3's six bundled changes therefore remains
+untested**, and both the report and the index say exactly that rather than implying an answer.
+
+**Still open for a future session:** the standard Test-U90 evaluation, without which no
+comparison to published methods can be claimed; the session-3 ablation; the UIQM convention;
+the missing positional encoding; and the GPU power clamp, which is now the binding constraint
+on every experiment this project wants to run.

@@ -148,7 +148,11 @@ is the projected physics feature map
 
 controls the influence of physics guidance.
 
-This is the core novelty of the proposed method.
+This mechanism — a physical prior added to the attention logits before the softmax — is
+**not novel**. It is an established design used in published underwater-enhancement and
+degradation-aware restoration transformers; see `docs/novelty_assessment.md` for the
+citations. It is described here because it is what this implementation does, not because
+it is a contribution.
 
 ---
 

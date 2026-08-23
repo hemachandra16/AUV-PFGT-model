@@ -4,7 +4,9 @@
 [![PyTorch 2.x](https://img.shields.io/badge/pytorch-2.x-orange.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> **PFGT-UIE** is a novel deep learning architecture for underwater image enhancement that integrates underwater imaging physics directly into transformer attention — without treating physics as a pre-processing step.
+> **PFGT-UIE** is a deep learning architecture for underwater image enhancement that integrates underwater imaging physics directly into transformer attention, rather than treating physics as a pre-processing step.
+>
+> **On novelty:** this mechanism is *not* new — encoding a physical prior as an additive pre-softmax attention bias is established prior work, and so is the wavelet/frequency split around it. See [`docs/novelty_assessment.md`](docs/novelty_assessment.md) for the citations and the full verdict. What this repository offers is a working, honestly verified implementation with real ablations and a documented account of what did and did not help.
 
 ---
 
@@ -28,7 +30,7 @@ Single-Level Haar Wavelet Transform                     │ transformer block
     │        │
     ▼        ▼
 Low-Freq    High-Freq
-Transformer Transformer   ← Physics-Guided Attention (Core Novelty)
+Transformer Transformer   ← Physics-Guided Attention
     │        │
     └───┬────┘
         │
@@ -49,13 +51,15 @@ Image Refinement Head (CNN decoder)
 Enhanced RGB Image (B, 3, H, W) ∈ [0, 1]
 ```
 
-### Key Novelty: Physics-Guided Attention
+### Physics-Guided Attention
 
 Standard attention: `Softmax(QKᵀ / √d) · V`
 
 **PFGT-UIE attention**: `Softmax(QKᵀ / √d + λP) · V`
 
 where **P** is a learned physics bias derived from the Physics Prior Encoder. This allows the transformer to focus on regions with severe degradation (attenuation, scattering, color distortion).
+
+This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in [`FINAL_REPORT.md`](FINAL_REPORT.md).
 
 ---
 
@@ -197,7 +201,7 @@ PhysicsFreqTransformer/
 │   └── uciqe.py                ← Underwater Color IQE (Yang 2015)
 ├── models/
 │   ├── attention/
-│   │   └── physics_attention.py  ← Physics-Guided Attention (core novelty)
+│   │   └── physics_attention.py  ← Physics-Guided Attention
 │   ├── fusion.py               ← Cross-frequency feature fusion
 │   ├── inverse_wavelet.py      ← Inverse Haar DWT reconstruction
 │   ├── build.py                ← build_model(): the ONLY model constructor
