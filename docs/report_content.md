@@ -74,7 +74,9 @@ Each branch tokenises its sub-band into a grid and runs a pre-LayerNorm transfor
 
 The attention is where the "physics-guided" claim lives:
 
-$$\text{Attention}(Q,K,V) = \text{Softmax}\!\left(\frac{QK^\top}{\sqrt{d}} + \lambda P\right)V$$
+```math
+Attention(Q, K, V)  =  Softmax( QKᵀ / √d  +  λP ) V
+```
 
 `P` is the physics feature map, projected by a 1×1 convolution to one channel per attention head, pooled onto the token grid and standardised. `λ` is a learned scalar. The bias is added to the attention logits **before** the softmax, so regions the physics encoder marks as heavily degraded can attract or repel attention.
 

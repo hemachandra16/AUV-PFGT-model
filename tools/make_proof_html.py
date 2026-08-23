@@ -202,6 +202,7 @@ def main() -> None:
     # ------------------------------------------------------------------ HTML
     P = []
     A = P.append
+    A('<meta charset="utf-8">')
     A("<title>PFGT-UIE — see the results yourself</title>")
     A("""<style>
 :root{--bg:#101014;--panel:#191920;--ink:#ececf2;--dim:#a0a0b0;--line:#2a2a36;

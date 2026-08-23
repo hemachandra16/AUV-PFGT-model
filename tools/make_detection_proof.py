@@ -221,6 +221,7 @@ def main() -> None:
     # ---------------------------------------------------------------- HTML
     P = []
     A = P.append
+    A('<meta charset="utf-8">')
     A("<title>Underwater detector — see the results yourself</title>")
     A("""<style>
 :root{--bg:#0b1416;--panel:#121d20;--ink:#e8f1f0;--dim:#8fa5a6;--line:#1e2f33;

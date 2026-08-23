@@ -1465,3 +1465,44 @@ of juxtaposition a reader takes as a win. The paragraph immediately under the ta
 it must not be read that way, and why: different split, self-chosen, and a 2.3 M-parameter
 model beating a published transformer by 2.4 dB is better evidence of an easy split than a
 good method. The website and PDF must both keep that paragraph adjacent to the table.
+
+### Phase 5 — the website (2026-08-22)
+
+`outputs/website.html`, 593 KB, self-contained, built by `tools/build_website.py` from
+`docs/report_content.md` + `docs/_figures.json`. Sits beside the two proof pages so its
+"see it yourself" links are plain siblings that work over `file://`.
+
+**Design decisions, since the brief banned the defaults.** The palette is not invented: amber
+and teal are lifted from the two proof pages, where amber marks the human-drawn ground-truth
+box and teal marks the machine's prediction. Carrying that pair through the whole site makes
+the accents mean something — amber for human judgement and caution, teal for machine output
+and confirmed results — rather than being decoration. Type is IBM Plex Sans Condensed for
+labelling, Source Serif 4 for body prose, IBM Plex Mono for every number, all with real
+fallback stacks. Layout is an asymmetric sticky-rail-plus-column with square corners and
+hairline rules; no cards, no shadows, no centred stack, no gradient anywhere.
+
+**S7-D-007 — the novelty verdict is placed twice, deliberately.** The brief said it must not
+be buried. It appears in the masthead spec strip above the fold ("Architectural novelty /
+None claimed") and again as section 7, which is set on a dark plate with the verdict at 40 px
+in amber. A reader who only sees the top of the page still sees the verdict.
+
+**S7-D-008 — a contrast bug the naive check would have missed.** The masthead and the section-7
+plate are dark in *both* colour schemes. In light mode they were inheriting `--signal-2` =
+`#8a6108`, the amber darkened for light backgrounds, which on a near-black ground measured
+**3.49:1** — the single most important line on the page was the least legible thing on it.
+Fixed by re-declaring the accent tokens locally on `.mast, #s7`; the verdict now measures
+**13.2:1**. Worth recording because "it has a dark mode and a light mode" is not the same
+claim as "every element is legible in both", and only measuring caught it.
+
+**Verification (no screenshots — browser pane was not displayed, so this was done by querying
+the live DOM, which is stricter):** all three webfonts confirmed resolved via
+`document.fonts.check`; all 15 embedded images `decode()` without error at their true pixel
+sizes; both inline SVGs report non-zero geometry; 9 sections, 9 rail links, 6 tables all inside
+`overflow-x:auto` wrappers, 7 timeline entries. Contrast measured element-by-element in both
+schemes — lowest anywhere is 5.35:1, everything else above 6:1. At 375 px the rail collapses,
+the grid goes single-column, wide tables scroll inside their wrappers and the page itself does
+not scroll horizontally. Zero U+FFFD replacement characters; λP, QKᵀ, R² and 1×1 all intact.
+
+**Also fixed, found while doing this:** neither proof page declared a charset, so a browser
+opening them from disk could fall back to windows-1252 and mojibake all 68 em-dashes. Added
+`<meta charset="utf-8">` to both generators and to the two already-published pages.
