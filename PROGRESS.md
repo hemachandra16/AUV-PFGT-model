@@ -1506,3 +1506,48 @@ not scroll horizontally. Zero U+FFFD replacement characters; λP, QKᵀ, R² and
 **Also fixed, found while doing this:** neither proof page declared a charset, so a browser
 opening them from disk could fall back to windows-1252 and mojibake all 68 em-dashes. Added
 `<meta charset="utf-8">` to both generators and to the two already-published pages.
+
+### Phase 6 — the PDF (2026-08-22)
+
+`outputs/PFGT-UIE_report.pdf`, 18 pages, 563 KB, built by `tools/build_pdf.py` via xhtml2pdf
+from the same `docs/report_content.md` the website renders from, so the two artefacts cannot
+disagree about a number.
+
+xhtml2pdf is not a browser — no CSS custom properties, no grid, no flexbox, no `@media` — so
+the print stylesheet is written separately in block flow and tables with literal colours. Three
+things needed specific handling: the pipeline diagram (below), fonts (PDF base-14 Helvetica and
+Times, so there is nothing to embed and nothing to fail to load), and the links to the proof
+pages, which become printed filenames because a hyperlink to a local HTML file is useless to
+somebody holding only the PDF.
+
+**S7-D-009 — the diagram is derived from the website's SVG, not retyped.** svglib can render
+SVG into the PDF, but only from presentation attributes; the web diagram's CSS classes and
+`var()` colours resolve to nothing. So `build_pdf.print_svg()` mechanically rewrites
+`build_website.PIPELINE_SVG` into a self-styled copy and asserts that no `class=` or `var(--`
+survives the rewrite. Retyping the coordinates would have been faster and would have let the
+two diagrams drift apart silently. The PDF gets real vector art, not a screenshot.
+
+**S7-D-010 — three defects that a "did it build?" check would have passed.** `pisa` reported
+**zero errors** for all of them:
+
+1. `QKᵀ` printed as a black `.notdef` box. The base-14 fonts encode WinAnsi only, and U+1D40 is
+   not in it. Substituted to `QK^T` for print only; the markdown and the website keep the real
+   glyph. Audited every other non-ASCII character the same way — arrows, λ, √, ×, ² and the
+   minus sign all encode fine, and the box-drawing characters never reach the PDF because that
+   fence becomes the diagram.
+2. `page-break-inside: avoid` is **silently ignored** by xhtml2pdf. A gallery table split
+   between its image row and its caption row, leaving Figure 4's three photographs at the foot
+   of page 12 and the sentence explaining them alone on an otherwise blank page 13. Fixed by
+   giving each gallery its own page and sizing it to fit whole; the tall turtle frame is what
+   makes the detection gallery the tight one, so its panels are 200 pt rather than 222 pt.
+3. Gallery panels sat left-aligned in oversized cells, leaving a ragged gap between the pair.
+
+All three were found by rasterising pages and looking at them. None were visible from the exit
+code, and only the first was visible from extracted text.
+
+**Verification.** 18 pages; 15 embedded raster images (matching the 15 selected figures); 33
+bookmarks in a three-level hierarchy from the `-pdf-outline` levels; zero `.notdef` boxes; zero
+orphaned or near-empty pages; figure numbering continuous 1–7. Text extraction confirms the
+load-bearing content survived into print — the novelty verdict verbatim, the "must not be read
+as" benchmark disclaimer, the untested-ablation admission, the UIQM caveat, the seed-42 split
+caveat, and the Awad et al. attribution — and that every results table reaches its final row.
