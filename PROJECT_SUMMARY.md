@@ -57,7 +57,7 @@ when the outcome contradicted the hypothesis — which was most of the time.
 | 5 | [`DATASET_EXPANSION_FEASIBILITY.md`](DATASET_EXPANSION_FEASIBILITY.md) | Verification-only: LSUI and EUVP are fetchable, and — checked by perceptual hashing validated against a positive control — **contain none of the 89 held-out test images.** |
 | 6 | [`FINAL_REPORT_SESSION6.md`](FINAL_REPORT_SESSION6.md) | 6.3× more training data at matched gradient steps gave **25.334 dB — 0.031 dB below session 3.** More data did not help, and the colour-style mismatch the two-stage recipe existed to prevent **never occurred**. |
 | 7 | [`docs/novelty_assessment.md`](docs/novelty_assessment.md) | The literature check. Verdict: **none of this project's architectural ideas are novel**, with citations for each mechanism. |
-| 8 | [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md) | Went looking for the standard UIEB test split to get a comparable number. **There is no standard split**, and the one published list that exists is 87.8% inside this project's training data. Measured the memorisation gap at **+4.88 dB**. |
+| 8 | [`FINAL_REPORT_SESSION8.md`](FINAL_REPORT_SESSION8.md) | Went looking for the standard UIEB test split to get a comparable number. **There is no standard split**, and the one published list that exists is 87.8% inside this project's training data. Measured the memorisation gap at **+4.88 dB**. |
 
 Full chronological log, including every decision and its reasoning: [`PROGRESS.md`](PROGRESS.md).
 
