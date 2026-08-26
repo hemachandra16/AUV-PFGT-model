@@ -1597,3 +1597,85 @@ untested**, and both the report and the index say exactly that rather than imply
 comparison to published methods can be claimed; the session-3 ablation; the UIQM convention;
 the missing positional encoding; and the GPU power clamp, which is now the binding constraint
 on every experiment this project wants to run.
+
+---
+
+## SESSION 8 — 2026-08-26 — the standard split does not exist, and the number cannot be had
+
+Narrow, investigation-only session: find the standard UIEB test split, evaluate the installed
+model on it, and close the report's "not comparable to published methods" caveat. The caveat
+does not close. It gets stronger.
+
+### Phase 1 — is there actually a standard split?
+
+The brief was explicit that this must be established, not assumed. It was, and the answer is no.
+
+**S8-D-001 — the UIEB authors publish no train/test split.** Their own benchmark page describes
+950 images, 890 with references and 60 challenging, and offers two downloads. There is no split
+file and no statement of one. So "Test-U90" is not an official designation; it is a size
+convention that papers adopted.
+
+**S8-D-002 — 840 direct file probes across 35 repositories found exactly one concrete list.**
+The sweep (`tools/_find_uieb_split.py`) checked 12 conventional split paths on two branches for
+every UIE repo harvestable from the community list plus the known baselines. Two hits, both the
+same `ddz16/UIE_Benckmark` file under its `main` and `master` aliases — i.e. one source, not
+two. There is no independent list to cross-check against, so no consensus can be claimed.
+
+Corroborating evidence from the other direction, which is what makes this conclusive rather
+than merely a failed search:
+
+* **U-shape Transformer** — the 22.91 dB baseline the report compares against — loads its split
+  from a `list_file` that is **not in its repository** (the path points at Google Drive).
+* **Semi-UIR** ships `data_split.py`, which *generates* a split with `random.seed(2022)` at
+  80/10/10.
+* **NMFC** ships `SplitTrainTest.m` and `fixedSplitTrainTest.m` — again, its own.
+
+Three independent papers each rolling their own split is positive evidence that no shared list
+is in circulation, not just absence of evidence.
+
+**This has a consequence for reading the literature that the report should carry:** if every
+paper measures on its own random 90 images, **published UIEB PSNR figures are not strictly
+comparable to each other either**, and Phase 2 shows image selection alone is worth several dB.
+
+Written up in full, with the search table and confidence statement, in
+`docs/standard_split_investigation.md`. The one list found is preserved at
+`docs/splits/uieb_T90_ddz16.txt` with a README stating plainly that it is not a standard.
+
+### Phase 2 — the evaluation, and why its headline number is worthless
+
+**S8-D-003 — 79 of the 90 candidate test images (87.8%) are in this project's training set.**
+This project's seed-42 split and the ddz16 split are different random draws of the same 890
+pairs, so they overlap the way any two independent draws would. The brief asked for this check
+and said an overlap would be worth flagging loudly rather than footnoting. It is the finding of
+the session.
+
+Scored with `tools/eval_on_list.py` — same model build, preprocessing and metric code as
+`validate.py`, confirmed by reproducing this project's own figure to four decimals (25.3644 dB):
+
+| Group | n | PSNR | 95% CI | SSIM |
+|---|---|---|---|---|
+| This project's own held-out | 89 | 25.364 | [24.36, 26.35] | 0.9289 |
+| T90, all 90 — **88% contaminated** | 90 | **28.186** | [27.26, 29.07] | 0.9588 |
+| T90, the 79 it trained on | 79 | 28.783 | [27.93, 29.66] | 0.9648 |
+| T90, the 11 it never saw | 11 | **23.901** | [21.04, 27.03] | 0.9157 |
+
+**S8-D-004 — the contaminated number is 28.19 dB, and it is the most dangerous number this
+project has produced.** Against U-shape Transformer's published 22.91 it reads as a 5.3 dB win.
+It is entirely an artefact of scoring a model on its own training data. Nothing about producing
+it requires bad faith: download a split list, run it, report the mean. It is recorded here
+specifically so nobody — including a future session — reaches for it.
+
+**S8-D-005 — the memorisation gap is +4.88 dB**, seen versus unseen, same model and same metric
+code on the same list. That is larger than the entire spread between the published methods in
+the report's comparison table (19.45 → 22.91). It is a clean, incidental measurement of how
+much train/test contamination inflates UIEB PSNR.
+
+**The honest figure is too weak to use.** 23.901 dB on 11 images has a 95% CI six dB wide, and
+its gap to the project's own 25.364 does not survive a two-sided permutation test (p = 0.349).
+It leans towards the T90 images being *no easier* than this project's split — the opposite of
+what the report speculated — but 11 images cannot establish that, and it is not claimed.
+
+**What a real comparison needs:** retrain from scratch on the 800-image complement of a declared
+test list, then evaluate on that list. ~4 h for one arm at session 3's settings under the power
+clamp. Not done — this session was investigation-only by instruction. And even then it would be
+comparable to one repository's split, not to a standard, because there is no standard.
