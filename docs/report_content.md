@@ -2,7 +2,7 @@
 
 ## Physics-Guided Frequency Transformer for Underwater Image Enhancement, with Marine Object Detection
 
-**A seven-session engineering and research record.** Held-out enhancement: **25.364 dB PSNR / 0.9289 SSIM**. Detection: **mAP@0.5 = 0.829** across ten marine classes.
+**An eight-session engineering and research record.** Held-out enhancement: **25.364 dB PSNR / 0.9289 SSIM**. Detection: **mAP@0.5 = 0.829** across ten marine classes.
 
 ---
 
@@ -201,6 +201,11 @@ Trained on UIEB + LSUI (5,080 pairs, 6.3× the data) at matched gradient steps, 
 ### Session 7 — honest positioning
 Literature review, this report, the website and the PDF. Section 7 is its output.
 
+### Session 8 — going after the comparable number, and not getting it
+Set out to close the one caveat left standing: evaluate on the standard UIEB test split so the comparison to published methods becomes real.
+
+> **Result: there is no standard split.** The dataset's authors publish none; 840 file probes across 35 repositories found exactly one concrete filename list, from a third-party aggregation. **79 of its 90 images are in this project's training set**, so the installed model cannot be scored on it — doing so anyway yields an inflated 28.19 dB. The caveat did not close; it got stronger. One thing was gained: the **+4.88 dB memorisation gap**, a direct measurement of how much train/test contamination inflates UIEB PSNR.
+
 ---
 
 ## 5. Results
@@ -223,7 +228,7 @@ All enhancement figures are on the same 89 held-out UIEB images, evaluated ident
 - **[Enhancement visual proof](../outputs/session4_proof.html)** — raw / baseline / current model / reference, on held-out images, including the ones that got worse.
 - **[Detection visual proof](../outputs/detection_proof.html)** — predicted boxes beside human-marked ground truth, covering the detector's best *and* worst classes.
 
-### Benchmark context — and why our number is not directly comparable
+### Benchmark context — and why no comparison is available
 
 | Method | Venue | UIEB split | PSNR | SSIM |
 |---|---|---|---|---|
@@ -234,8 +239,21 @@ All enhancement figures are on the same 89 held-out UIEB images, evaluated ident
 | U-shape Transformer | TIP 2023 | Test-U90 | 22.91 | 0.91 |
 | PCAFA-Net | Sensors 2025 | UIEB | 22.80 | 0.890 |
 | *This project* | — | *own seed-42 split, 89 images* | *25.364* | *0.9289* |
+| *This project* | — | *the 11 images of one published list it never trained on* | *23.901* | *0.9157* |
 
-**This must not be read as "we beat U-shape Transformer."** Our 89 held-out images are a random seed-42 split of UIEB's 890 pairs chosen by this project; the published numbers use the community's standard Test-U90 split, a *different set of images*. UIEB frames vary enormously in difficulty, and a 2.3 M-parameter model outscoring a published transformer by 2.4 dB is far more likely to reflect an easier split than a better method. Evaluating on the standard split is required before any comparison can be claimed, and this project has not done it.
+**This must not be read as "we beat U-shape Transformer."** Session 8 set out to fix exactly this, by evaluating on the standard split. It found there is no standard split to evaluate on.
+
+**There is no official UIEB train/test division.** The dataset's own authors publish none. Across 35 repositories probed by 840 direct file requests, exactly one publishes a concrete list of 90 test filenames — a third-party benchmark aggregation with no stated provenance. The most-cited baseline here, U-shape Transformer, keeps its split list out of its repository entirely; Semi-UIR and NMFC both ship code that *generates* their own. "Test-U90" is a size convention, not a shared list of images.
+
+That has a consequence beyond this project: **the published rows above are not strictly comparable to one another either**, because each is measured on a different random 90 images.
+
+**And this model cannot be scored on the one list that does exist.** That list and this project's seed-42 split are independent random draws of the same 890 pairs, so they overlap heavily: **79 of its 90 images — 87.8% — are in this project's training set.**
+
+Scoring it anyway yields **28.19 dB**, which against U-shape Transformer's 22.91 would read as a 5.3 dB win. That number is an artefact of evaluating a model on its own training data, and producing it requires no bad faith at all — download a list, run it, report the mean. On the 11 images of that list this model genuinely never saw it scores **23.901 dB**, with a 95% confidence interval of [21.04, 27.03] and no statistically distinguishable gap from our own 25.364 dB (permutation test, p = 0.349). Eleven images cannot support a claim in either direction.
+
+One incidental measurement is worth more than the comparison would have been: the same model on the same list scores **+4.88 dB higher on the images it was trained on than on the images it was not**. That gap is larger than the entire spread between every published method in the table above.
+
+A real comparison needs the architecture retrained from scratch on the complement of a declared test list — about four hours — and, to be rigorous, the same protocol applied to the baselines rather than quoting their self-reported figures. Neither has been done. Full investigation: [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md).
 
 ---
 
@@ -278,7 +296,7 @@ at the end, specifically to check honestly whether the result was original. It w
 that reflects a well-trodden design space that several teams reached independently, not
 derivation from any of the work cited below.
 
-**Physics-guided attention is not new.** Sánchez-Ferreira et al. encode a physical prior as "a spatial bias matrix that directly modulates attention affinity" — the same mechanism class as this project's `Softmax(QKᵀ/√d + λP)V`, for underwater deblurring. PCAFA-Net, PGANet, SFormer, physical-guided transformer interaction, and physics-aware diffusion transformers all occupy the same design space. `docs/math.md` calls this "the core novelty of the proposed method"; **that claim is not supportable and should be rewritten.**
+**Physics-guided attention is not new.** Sánchez-Ferreira et al. encode a physical prior as "a spatial bias matrix that directly modulates attention affinity" — the same mechanism class as this project's `Softmax(QKᵀ/√d + λP)V`, for underwater deblurring. PCAFA-Net, PGANet, SFormer, physical-guided transformer interaction, and physics-aware diffusion transformers all occupy the same design space. `docs/math.md` used to call this "the core novelty of the proposed method"; that claim was not supportable and **has since been retracted there and in `README.md`.**
 
 **Wavelet/frequency-split transformers for underwater enhancement are not new.** MixRformer is a dual-branch wavelet-domain underwater enhancement network — structurally the same idea as this one. U-ENHANCE, WEDM, WWE-UIE and a Mamba spectral-attentive wavelet network all combine wavelet decomposition with attention for this exact task. It is standard practice in the subfield.
 
@@ -300,7 +318,7 @@ Three things survive scrutiny, and all of them are engineering and methodology r
 
 ## 8. Limitations
 
-**The comparison to published methods is not valid.** Our held-out split is our own; published numbers use the standard Test-U90 split. Until the model is evaluated on the standard split, Section 5's table is context and nothing more.
+**No comparison to published methods is available, and none can be made without a retrain.** There is no standard UIEB test split — the dataset's authors publish none, and the papers each use their own random 90 images. The single published filename list that could be found overlaps this project's training set by 87.8%, so the installed model cannot be scored on it. Section 5's table is context and cannot become a claim until the architecture is retrained on a declared test list's complement.
 
 **Session 3's six changes remain unattributed.** They were bundled into one training run, and the +0.250 dB gain has never been traced to any one of them. Three ablation arms would settle it at roughly 3.8 hours each; it has not been done.
 

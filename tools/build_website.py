@@ -497,8 +497,9 @@ def main() -> None:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PFGT-UIE &#8212; Physics-Guided Frequency Transformer for Underwater Image Enhancement</title>
-<meta name="description" content="A seven-session engineering and research record: 25.364 dB
-held-out enhancement, mAP@0.5 0.829 detection, and an honest account of what is and is not novel.">
+<meta name="description" content="An eight-session engineering and research record: 25.364 dB
+held-out enhancement, mAP@0.5 0.829 detection, an honest account of what is and is not novel, and
+why no comparison to published UIEB numbers is available.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="{FONTS}">

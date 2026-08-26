@@ -1679,3 +1679,48 @@ what the report speculated — but 11 images cannot establish that, and it is no
 test list, then evaluate on that list. ~4 h for one arm at session 3's settings under the power
 clamp. Not done — this session was investigation-only by instruction. And even then it would be
 comparable to one repository's split, not to a standard, because there is no standard.
+
+### Phase 3 — propagating the correction
+
+Every deliverable carried the same wrong premise: that a standard split exists and this project
+had simply not used it. All of them now say what was actually established, which is a *stronger*
+caveat, not a softer one.
+
+* `docs/report_content.md` §5 — heading changed from "why our number is not directly comparable"
+  to "why no comparison is available"; the benchmark table gains a second project row (the 11
+  genuinely-unseen images, 23.901 dB); the explanatory passage rewritten around the real finding,
+  including the 28.19 dB trap and the +4.88 dB memorisation gap.
+* `docs/report_content.md` §4 — a session 8 entry in the research journey, with its result stated
+  the same way every other session's is.
+* `docs/report_content.md` §8 — limitation 1 rewritten.
+* `docs/novelty_assessment.md` §6 — same correction.
+* `PROJECT_SUMMARY.md` — limitation 1 rewritten, session 8 added to the record table and the
+  reference documents, `tools/eval_on_list.py` added to the reproduction commands, and the
+  finding promoted into the three-bullet summary at the top so a reader meets it immediately.
+
+**S8-D-006 — a stale claim was caught while doing this.** §7 still said `docs/math.md` "calls
+this the core novelty of the proposed method; that claim is not supportable and **should be
+rewritten**". Session 7 already rewrote it, in both `docs/math.md` and `README.md`. The report
+was describing a state that no longer existed. Now reads "has since been retracted there and in
+`README.md`". Worth noting as a maintenance hazard: a report that recommends a fix, and a later
+session that applies it, will disagree unless someone checks.
+
+**Rebuild verified by inspecting the artefacts, not by trusting exit codes.** Both rebuilt
+clean; every new value (28.19, 23.901, 87.8%, 4.88, p = 0.349, "there is no standard split",
+"840 direct file requests") confirmed present in the website HTML *and* in text extracted from
+the PDF, and every superseded phrase confirmed absent. The PDF holds at 18 pages, 15 images,
+zero orphan pages, zero `.notdef` boxes, with the rewritten benchmark section fitting on one
+page (page 12) — checked by rasterising it and looking. The website was re-checked live: 8-row
+benchmark table with both project rows, section 8 limitation updated, session 8 in the journey
+timeline, no horizontal overflow, all tables still wrapped.
+
+One straggler the grep caught: `seven-session` survived in the website's `<meta description>`,
+which is hardcoded in `tools/build_website.py` rather than coming from the markdown. Fixed there.
+A source-only search would have missed it.
+
+**S8-D-007 — the separately published website is NOT updated by this session.** Session 7's
+honest-report website was also published as a standalone artifact at a URL held by the user. It
+lives outside this repository and outside `tools/build_website.py`, so nothing done here touches
+it. **It still shows the old, now-incorrect claim that the comparison is blocked merely because
+this project used a different split from the standard one.** It needs the same correction applied
+by whoever owns that artifact; `docs/report_content.md` §5 is the text to copy.
