@@ -271,6 +271,13 @@ About half the damage is a fixable wiring problem; the other half is intrinsic. 
 
 > **None of this project's architectural ideas are novel.**
 
+**This is a claim about who published first, not about copying.** Nothing below was consulted
+during this project's seven sessions of development — the codebase was scaffolded
+independently and rebuilt from its own debugging, and this literature search happened only now,
+at the end, specifically to check honestly whether the result was original. It was not, but
+that reflects a well-trodden design space that several teams reached independently, not
+derivation from any of the work cited below.
+
 **Physics-guided attention is not new.** Sánchez-Ferreira et al. encode a physical prior as "a spatial bias matrix that directly modulates attention affinity" — the same mechanism class as this project's `Softmax(QKᵀ/√d + λP)V`, for underwater deblurring. PCAFA-Net, PGANet, SFormer, physical-guided transformer interaction, and physics-aware diffusion transformers all occupy the same design space. `docs/math.md` calls this "the core novelty of the proposed method"; **that claim is not supportable and should be rewritten.**
 
 **Wavelet/frequency-split transformers for underwater enhancement are not new.** MixRformer is a dual-branch wavelet-domain underwater enhancement network — structurally the same idea as this one. U-ENHANCE, WEDM, WWE-UIE and a Mamba spectral-attentive wavelet network all combine wavelet decomposition with attention for this exact task. It is standard practice in the subfield.
