@@ -13,3 +13,10 @@
 
 # The published HTML deliverables embed base64 images; keep their bytes byte-stable too.
 outputs/*.html -text
+
+# The published HTML/PDF deliverables are generated artefacts whose bulk is base64-embedded
+# images, not authored markup. Without this GitHub's language bar reads them as 86% HTML and
+# buries the Python that is the actual project.
+outputs/*.html linguist-documentation
+outputs/*.pdf  linguist-documentation
+docs/_figures.json linguist-generated

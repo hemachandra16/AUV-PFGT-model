@@ -27,12 +27,11 @@ Detection: mAP@0.5 = 0.829 over 4,200 held-out RUOD images across ten marine cla
 (precision 83.9%, recall 75.6%). Two caveats stated up front rather than buried: **enhancement
 makes detection worse, not better** — the pipeline detects on raw frames by design — and **no
 comparison to published UIEB numbers is available**, because there is no standard test split to
-compare on. Both are documented in full in
-[`reports/FINAL_REPORT_SESSION8.md`](reports/FINAL_REPORT_SESSION8.md) and
+compare on. Both are documented in full in the report and in
 [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md).
 
-Every session's working log lives in [`reports/`](reports/); the full chronological record is
-[`reports/PROGRESS.md`](reports/PROGRESS.md).
+The report's markdown source is [`docs/report_content.md`](docs/report_content.md); both the
+PDF and the website are rendered from it, so they cannot disagree about a number.
 
 ---
 
@@ -85,7 +84,7 @@ Standard attention: `Softmax(QKᵀ / √d) · V`
 
 where **P** is a learned physics bias derived from the Physics Prior Encoder. This allows the transformer to focus on regions with severe degradation (attenuation, scattering, color distortion).
 
-This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in [`FINAL_REPORT.md`](reports/FINAL_REPORT.md).
+This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in `FINAL_REPORT.md`.
 
 ---
 

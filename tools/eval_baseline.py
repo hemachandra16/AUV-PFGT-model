@@ -7,7 +7,7 @@ Three things this settles:
    trained on. This re-scores the same checkpoint on the seeded held-out 89 only.
 
 2. **What it scores with a correct UCIQE.** ``metrics/uciqe.py`` was broken (see
-   reports/PROGRESS.md D-010); every previously reported UCIQE is meaningless. Both models are
+   docs/report_content.md D-010); every previously reported UCIQE is meaningless. Both models are
    scored here with the fixed metric.
 
 3. **How much the silent ``num_heads`` mismatch cost.** train.py built the model with

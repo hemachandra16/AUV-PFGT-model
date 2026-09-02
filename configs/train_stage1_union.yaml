@@ -56,10 +56,10 @@ loss:
                                # R^2 = 0.015/0.104/0.346), because the UIEB references are
                                # human-retouched. A stronger loss cannot create information
                                # that is not in the input. Set to 0 so this config reproduces
-                               # the installed checkpoint. See reports/FINAL_REPORT_SESSION4.md.
+                               # the installed checkpoint. See docs/report_content.md.
   lambda_frequency: 0.0        # DISABLED -- measured 99.97% correlated with pixel L1 on
                                # the LL band, i.e. a duplicate of L1 at 0.15 weight
-                               # contributing 3.3% of the objective. See reports/PROGRESS.md F4.
+                               # contributing 3.3% of the objective. See docs/report_content.md F4.
 
 # ---- Optimizer ---------------------------------------------
 optimizer:
