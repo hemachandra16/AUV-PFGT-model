@@ -38,3 +38,6 @@ runs/
 # Dataset-expansion feasibility probe (session 5) — ~680 MB of candidate data
 _dsprobe/
 outputs/_pdfbuild/
+
+# Editor / assistant tooling config, not part of the project
+.claude/
