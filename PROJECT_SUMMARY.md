@@ -59,7 +59,6 @@ is [`docs/report_content.md`](docs/report_content.md), rendered to
 | File | Contents |
 |---|---|
 | [`docs/report_content.md`](docs/report_content.md) | Canonical report source. Edit this, not the rendered HTML or PDF. |
-| [`docs/novelty_assessment.md`](docs/novelty_assessment.md) | Mechanism-by-mechanism comparison against 2023–2026 prior work, with checkable links. |
 | [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md) | Why no comparison to published UIEB numbers is available, and what one would cost. |
 | [`docs/math.md`](docs/math.md) | The formulation, module by module. |
 | [`docs/architecture.md`](docs/architecture.md) | Module and tensor-shape reference. |

@@ -150,7 +150,7 @@ controls the influence of physics guidance.
 
 This mechanism — a physical prior added to the attention logits before the softmax — is
 **not novel**. It is an established design used in published underwater-enhancement and
-degradation-aware restoration transformers; see `docs/novelty_assessment.md` for the
+degradation-aware restoration transformers; see section 7 of the report for the
 citations. It is described here because it is what this implementation does, not because
 it is a contribution.
 

@@ -6,7 +6,7 @@
 
 > **PFGT-UIE** is a deep learning architecture for underwater image enhancement that integrates underwater imaging physics directly into transformer attention, rather than treating physics as a pre-processing step.
 >
-> **On novelty:** this mechanism is *not* new — encoding a physical prior as an additive pre-softmax attention bias is established prior work, and so is the wavelet/frequency split around it. See [`docs/novelty_assessment.md`](docs/novelty_assessment.md) for the citations and the full verdict. What this repository offers is a working, honestly verified implementation with real ablations and a documented account of what did and did not help.
+> **On novelty:** this mechanism is *not* new — encoding a physical prior as an additive pre-softmax attention bias is established prior work, and so is the wavelet/frequency split around it. Section 7 of [the report](outputs/PFGT-UIE_report.pdf) carries the citations and the full verdict. What this repository offers is a working, honestly verified implementation with real ablations and a documented account of what did and did not help.
 
 ---
 
@@ -88,7 +88,7 @@ Standard attention: `Softmax(QKᵀ / √d) · V`
 
 where **P** is a learned physics bias derived from the Physics Prior Encoder. This allows the transformer to focus on regions with severe degradation (attenuation, scattering, color distortion).
 
-This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in `FINAL_REPORT.md`.
+This is a known mechanism class rather than a contribution of this project — see section 7 of [the report](outputs/PFGT-UIE_report.pdf). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in section 2.3.
 
 ---
 
