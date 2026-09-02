@@ -30,16 +30,18 @@ Three findings are worth knowing before reading anything else:
 
 ## Start here
 
-| | What it is |
-|---|---|
-| **[The report — website](outputs/website.html)** | The full write-up: architecture module by module, results, the research journey, the novelty assessment, limitations, references. Self-contained, opens by double-click, light and dark. |
-| **[The report — PDF](outputs/PFGT-UIE_report.pdf)** | The same content, 18 pages, for printing or sending. |
-| **[Enhancement: see it yourself](outputs/session4_proof.html)** | Held-out photographs: original, enhanced, human reference. Includes the images the model made *worse* — 39 better, 14 about the same, 36 worse. |
-| **[Detection: see it yourself](outputs/detection_proof.html)** | Predicted boxes beside human-marked ground truth on ten held-out frames, deliberately covering the detector's three worst classes as well as its three best. |
+**[The full report — PDF](outputs/PFGT-UIE_report.pdf)** — 18 pages covering the architecture
+module by module, the results, the research journey across eight sessions, the novelty
+assessment, the limitations and the references. It renders directly in GitHub's file viewer,
+and embeds the visual proofs: held-out enhancement comparisons (including the images the model
+made *worse*) and detection boxes beside human-marked ground truth on the detector's worst
+classes as well as its best.
 
-Both report formats are rendered from one source, [`docs/report_content.md`](docs/report_content.md),
-so they cannot disagree about a number. Rebuild either with `python tools/build_website.py` or
-`python tools/build_pdf.py`.
+Rendered from [`docs/report_content.md`](docs/report_content.md). The same source also builds a
+self-contained web version (`python tools/build_website.py`), and the two proof galleries
+regenerate with `python tools/make_proof_html.py` and `python tools/make_detection_proof.py`.
+Those HTML files are not committed — GitHub cannot render them inline, and their embedded
+images would swamp the repository.
 
 ---
 

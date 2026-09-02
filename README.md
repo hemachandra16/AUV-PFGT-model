@@ -17,10 +17,14 @@ New to this repository? Read these before the setup instructions below.
 | | |
 |---|---|
 | **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** | **The place to start.** Headline results, the three things worth knowing up front, an index of all eight session reports, and the known limitations. |
-| **[The full report — PDF](outputs/PFGT-UIE_report.pdf)** | 18 pages: architecture module by module, results, the research journey, the novelty assessment, references. Renders directly in GitHub's file viewer. |
-| **[The full report — website](outputs/website.html)** | Same content as a single self-contained page. GitHub will not render HTML inline — clone the repo and open the file, or use the PDF above. |
-| **[Enhancement: see it yourself](outputs/session4_proof.html)** | Held-out photographs, original versus enhanced versus human reference — including the ones the model made *worse*. Open locally. |
-| **[Detection: see it yourself](outputs/detection_proof.html)** | Predicted boxes beside human-marked ground truth, covering the detector's worst classes as well as its best. Open locally. |
+| **[The full report — PDF](outputs/PFGT-UIE_report.pdf)** | 18 pages: architecture module by module, results, the research journey, the novelty assessment, limitations, references. Renders directly in GitHub's file viewer. |
+
+The report is also buildable as a single self-contained web page, and the two visual proof
+galleries (enhancement before/after, and detection boxes against human-marked ground truth)
+regenerate from the checkpoints — `python tools/build_website.py`,
+`python tools/make_proof_html.py`, `python tools/make_detection_proof.py`. They are not
+committed because GitHub cannot render HTML inline, and their base64-embedded images would
+otherwise dominate the repository.
 
 **Results at a glance.** Enhancement: 25.364 dB PSNR / 0.9289 SSIM on 89 held-out UIEB images.
 Detection: mAP@0.5 = 0.829 over 4,200 held-out RUOD images across ten marine classes
