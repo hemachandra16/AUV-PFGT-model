@@ -1812,3 +1812,69 @@ comparison to published work — stated up front rather than left to be discover
 artefacts in `reports/FINAL_REPORT_SESSION6.md` §6 and stay. `tools/_*.py` probe scripts stay —
 several are cited by name in the reports as the evidence behind a finding. Nothing was deleted
 this session.
+
+### Phases 2–4 — history rewrite, verification, push
+
+**Backup first.** `git bundle create --all` written to the session scratchpad and verified
+("The bundle records a complete history") before touching history, so the pre-rewrite state is
+recoverable independently of git's reflog.
+
+**The trailer was narrower than expected: 8 of 41 commits**, one single variant,
+`Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`. The earlier sessions had not been
+adding it. A sweep for other attribution forms — `anthropic`, `claude code`, `generated with`,
+the robot emoji — found nothing else, and no commit message mentioned Claude in legitimate prose,
+so there was nothing at risk of being over-stripped. The callback was still written narrowly (it
+matches a line that *is* a co-authorship trailer, not any line containing the word) because it
+should be correct regardless.
+
+Run via `git-filter-repo` with the callback passed as a subprocess argument rather than through a
+shell, so none of the pattern's escaping could be mangled in transit.
+
+**Phase 3 verification — all four checks pass:**
+
+| Check | Result |
+|---|---|
+| `co-authored-by` / `noreply@anthropic` anywhere in history | **0 hits** |
+| Broader sweep (`anthropic`, `claude code`, `generated with`, 🤖) | **0 hits** |
+| Author identity, all commits | 41 / 41 `Hemachandra <charizardx3815@gmail.com>` |
+| Committer identity, all commits | 41 / 41 `Hemachandra <charizardx3815@gmail.com>` |
+| Commit count before → after | **41 → 41**, intact |
+| Spot-checked messages | body text intact, trailers gone, no stray blank endings |
+
+**Phase 1's work survived the rewrite**, confirmed rather than assumed: clean working tree, all
+eight files present in `reports/`, all four deliverables still tracked, **68 relative links
+across the repository resolving with zero broken**, and the PDF still opening at 18 pages / 15
+images with its committed blob byte-identical to the file on disk — the check that matters most
+given S9-D-004.
+
+**Pushed.** Branch renamed `master` → `main`, remote added, `git push -u origin main` succeeded
+on the first attempt with cached credentials. **41 commits, 128 files, 2.90 MiB.** Local and
+remote HEAD both `eff0abbb5dfc689d06273f897926ed751ad871ad`; repository confirmed still
+**Public** with default branch `main`, and the remote HEAD's author reads
+`Hemachandra <charizardx3815@gmail.com>`.
+
+`git` could not resolve `github.com` from inside the tool sandbox during pre-flight (S9-D-002),
+which is why the repository was verified over HTTP first; the push itself was run unsandboxed
+and worked, and `git ls-remote` succeeded afterwards too.
+
+**On the contributor graph:** GitHub's `/contributors` endpoint returned an *empty* list
+immediately after the push — it computes that asynchronously and caches it. An empty or briefly
+stale contributor list is not a sign the trailer removal failed; the authoritative check is that
+zero commits contain the trailer and every author line is the user's own identity, both verified
+above. It can take a while to populate and settle.
+
+**S9-D-006 — one small addition, logged rather than made silently.** `tools/_linkcheck.py` was
+written for this session's verification and kept, matching the existing `tools/_*.py` convention.
+It resolves every relative markdown link in every tracked file against the working tree, so the
+link check that caught S9-D-003 is reproducible rather than a one-off.
+
+### Session 9 close-out
+
+Reorganised, history cleaned, published. Nothing was deleted, no report substance changed, and
+the two entry points — `README.md` and `PROJECT_SUMMARY.md` — remain at the repository root
+where a first-time visitor will meet them.
+
+**Still outstanding from session 8, and outside this repository:** the separately published
+artifact website still carries the superseded claim that the comparison to published methods is
+blocked merely because this project used a different split. The corrected text is
+`docs/report_content.md` §5.
