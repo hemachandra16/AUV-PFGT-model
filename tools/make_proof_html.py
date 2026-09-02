@@ -357,7 +357,7 @@ tr.hl td{color:var(--good);font-weight:700}
     A("</table>")
     A(f"<p class='note' style='margin-top:14px'>Averages over all {len(rows)} held-out test "
       f"photos, computed the same way for every version. Full technical detail, including what "
-      f"did <i>not</i> work, is in <code>FINAL_REPORT_SESSION4.md</code>.</p>")
+      f"did <i>not</i> work, is in <code>reports/FINAL_REPORT_SESSION4.md</code>.</p>")
     A("</div>")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)

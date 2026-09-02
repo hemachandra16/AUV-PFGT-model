@@ -253,7 +253,7 @@ Scoring it anyway yields **28.19 dB**, which against U-shape Transformer's 22.91
 
 One incidental measurement is worth more than the comparison would have been: the same model on the same list scores **+4.88 dB higher on the images it was trained on than on the images it was not**. That gap is larger than the entire spread between every published method in the table above.
 
-A real comparison needs the architecture retrained from scratch on the complement of a declared test list — about four hours — and, to be rigorous, the same protocol applied to the baselines rather than quoting their self-reported figures. Neither has been done. Full investigation: [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md).
+A real comparison needs the architecture retrained from scratch on the complement of a declared test list — about four hours — and, to be rigorous, the same protocol applied to the baselines rather than quoting their self-reported figures. Neither has been done. Full investigation: [`docs/standard_split_investigation.md`](standard_split_investigation.md).
 
 ---
 

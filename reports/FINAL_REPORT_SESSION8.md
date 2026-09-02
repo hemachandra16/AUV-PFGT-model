@@ -6,8 +6,8 @@ no training, no architecture changes.
 > Prior reports: [S1](FINAL_REPORT.md) · [S2](FINAL_REPORT_150EPOCH.md) ·
 > [S3](FINAL_REPORT_SESSION3.md) · [S4](FINAL_REPORT_SESSION4.md) ·
 > [feasibility](DATASET_EXPANSION_FEASIBILITY.md) · [S6](FINAL_REPORT_SESSION6.md) ·
-> [novelty](docs/novelty_assessment.md). Full log: [`PROGRESS.md`](PROGRESS.md).
-> Full investigation: [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md).
+> [novelty](../docs/novelty_assessment.md). Full log: [`PROGRESS.md`](PROGRESS.md).
+> Full investigation: [`docs/standard_split_investigation.md`](../docs/standard_split_investigation.md).
 
 ---
 
@@ -138,8 +138,8 @@ now-incorrect claim.** The replacement text is `docs/report_content.md` §5.
 
 | Path | What |
 |---|---|
-| [`docs/standard_split_investigation.md`](docs/standard_split_investigation.md) | Full investigation: what was searched, what was found, confidence, and what a real comparison would require. |
-| [`docs/splits/uieb_T90_ddz16.txt`](docs/splits/uieb_T90_ddz16.txt) | The one list found, preserved with a README stating plainly that it is **not** a standard. |
+| [`docs/standard_split_investigation.md`](../docs/standard_split_investigation.md) | Full investigation: what was searched, what was found, confidence, and what a real comparison would require. |
+| [`docs/splits/uieb_T90_ddz16.txt`](../docs/splits/uieb_T90_ddz16.txt) | The one list found, preserved with a README stating plainly that it is **not** a standard. |
 | `tools/eval_on_list.py` | Scores a checkpoint on an explicit filename list, partitioned into ALL / SEEN-in-training / UNSEEN, so a contaminated number can never be reported as a test result by accident. |
 | `tools/_find_uieb_split.py` | The repository sweep, kept so the negative result is reproducible. |
 | `results/T90_ddz16_*.csv` | Per-image metrics for all three groups. |

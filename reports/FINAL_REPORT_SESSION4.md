@@ -4,7 +4,7 @@
 
 > Prior reports: [session 1](FINAL_REPORT.md) · [session 2](FINAL_REPORT_150EPOCH.md) ·
 > [session 3](FINAL_REPORT_SESSION3.md). Full log: [`PROGRESS.md`](PROGRESS.md).
-> **Look at the pictures instead:** [`outputs/session4_proof.html`](outputs/session4_proof.html)
+> **Look at the pictures instead:** [`outputs/session4_proof.html`](../outputs/session4_proof.html)
 > — double-click it, no setup needed.
 
 ---

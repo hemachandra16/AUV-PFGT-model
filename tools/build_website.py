@@ -469,6 +469,10 @@ def main() -> None:
         html = align_numeric_columns(html)
         # proof pages ship as siblings of website.html, so drop the docs/-relative prefix
         html = html.replace('href="../outputs/', 'href="')
+        # links written relative to docs/ (where the source lives) need re-pointing for a
+        # page that ships from outputs/
+        html = html.replace('href="standard_split_investigation.md"',
+                            'href="../docs/standard_split_investigation.md"')
 
         if s.number == 4:                       # research journey -> timeline rail
             html = f'<div class="tl">{html}</div>'

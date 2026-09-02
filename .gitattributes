@@ -1,0 +1,15 @@
+# core.autocrlf is true on this machine. Without these rules git classified the report PDF as
+# text and warned it would rewrite LF to CRLF on checkout, which would corrupt it. Mark every
+# binary artefact explicitly rather than relying on git's content sniffing.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.zip   binary
+*.pt    binary
+*.pth   binary
+*.onnx  binary
+
+# The published HTML deliverables embed base64 images; keep their bytes byte-stable too.
+outputs/*.html -text

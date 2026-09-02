@@ -1724,3 +1724,91 @@ lives outside this repository and outside `tools/build_website.py`, so nothing d
 it. **It still shows the old, now-incorrect claim that the comparison is blocked merely because
 this project used a different split from the standard one.** It needs the same correction applied
 by whoever owns that artifact; `docs/report_content.md` §5 is the text to copy.
+
+---
+
+## SESSION 9 — 2026-09-02 — repository organisation and first public push
+
+Mechanical session. No architecture, training, or report-substance changes: only where files
+live, how commit messages read, and getting the repository onto GitHub.
+
+### Phase 0 — pre-flight
+
+* Clean tree, **40 commits**, branch `master`. Every commit already authored by
+  `Hemachandra <charizardx3815@gmail.com>` — the attribution problem was purely the
+  `Co-Authored-By` trailer, not the author field.
+* **Worktree removed.** `_archive/baseline_code` was checked out at `ad0f4d8` (detached HEAD).
+  A history rewrite invalidates that hash, so it was removed with `git worktree remove --force`
+  and pruned. It was a local debugging convenience only; `_archive/` is gitignored and had zero
+  tracked files, so nothing was lost from the repository.
+* **Nothing oversized was tracked.** No `checkpoints/`, `datasets/` or `logs/tensorboard`
+  entries; 121 files, 1.77 MiB.
+* **The four deliverables were all untracked**, excluded wholesale by `.gitignore:16 outputs/`.
+  Force-added individually. Only 4 of the 909 files in `outputs/` are tracked — the hundreds of
+  loose per-session sample PNGs stay excluded.
+* `includeCoAuthoredBy: false` written to both `~/.claude/settings.json` (merged into 7 existing
+  keys, none disturbed) and a new project-local `.claude/settings.json`, so the behaviour does
+  not depend on which machine or scope wins.
+
+**S9-D-001 — a secret scan was run before anything went public.** Not asked for, but a public
+push is one-way. No API keys, tokens, private keys or credential-shaped strings in any tracked
+file, and the user's email appears in none of them. (An unrelated API key does sit in
+`~/.claude/settings.json`, which is outside the repository and not pushed.)
+
+**S9-D-002 — `git` cannot reach the network from this sandbox, but HTTP via Python can.**
+`git ls-remote` fails with `Could not resolve host: github.com` while a Python `urllib` request
+to the GitHub API succeeds through the proxy. Used the latter to confirm the target repository
+before doing any work: `hemachandra16/AUV-PFGT-model`, **public, empty (size 0), default branch
+`main`** — matching the brief, so it was safe to proceed.
+
+### Phase 1 — organisation
+
+Eight documents moved into `reports/` with `git mv`, all recorded by git as renames (`R`), so
+per-file history survives:
+
+`FINAL_REPORT.md` · `FINAL_REPORT_150EPOCH.md` · `FINAL_REPORT_SESSION3.md` ·
+`FINAL_REPORT_SESSION4.md` · `FINAL_REPORT_SESSION6.md` · `FINAL_REPORT_SESSION8.md` ·
+`DATASET_EXPANSION_FEASIBILITY.md` · `PROGRESS.md`
+
+`README.md` and `PROJECT_SUMMARY.md` stay at the root, being the two entry points.
+
+Link repair, in exactly three classes: root files gained `reports/` (9 links); moved reports
+gained `../` for `docs/`/`outputs/` targets (5 links); report-to-report links were left alone,
+since those files moved together and stayed siblings. Eight further mentions in
+`configs/*.yaml`, `tools/eval_baseline.py` and `tools/make_proof_html.py` turned out to be prose
+in comments rather than paths used by code — nothing broke, but they were updated to name
+`reports/...` so the references stay accurate.
+
+**S9-D-003 — verification found a broken link that predated this session.**
+`docs/report_content.md` linked to `docs/standard_split_investigation.md` while itself living in
+`docs/`, so the target never resolved — a session 8 bug that shipped. Fixed to a sibling-relative
+link, and `tools/build_website.py` taught to re-point that one href to `../docs/...` for the
+page that ships from `outputs/`. Both artefacts rebuilt; since they had never been committed,
+this cost nothing in history and guarantees the committed artefact matches the committed source.
+A whole-repo check now resolves **67 relative links across 19 files with zero broken**, and it
+deliberately checks every tracked markdown file rather than only the ones touched here.
+
+**S9-D-004 — `core.autocrlf=true` would have corrupted the PDF.** Force-adding
+`outputs/PFGT-UIE_report.pdf` produced *"LF will be replaced by CRLF the next time Git touches
+it"* — git had classified a binary as text, and checkout would have rewritten bytes inside it.
+Added `.gitattributes` marking `*.pdf` and the other binary types explicitly, plus `-text` on
+`outputs/*.html` so the base64-bearing pages stay byte-stable. Re-staged and verified all four
+blobs in the index are **byte-identical to the files on disk**. This would have shipped a broken
+PDF to a public repository and the build would have reported no error at all.
+
+**S9-D-005 — the MIT badge pointed at a file that did not exist.** `README.md` has carried
+`[![License: MIT](...)](LICENSE)` since the first session with no `LICENSE` in the repository.
+Added the standard MIT text, copyright "2026 Hemachandra" — matching what was already claimed,
+not a new licensing decision.
+
+`README.md` gained a **Start here** section ahead of the technical setup: what the project is,
+a table pointing at `PROJECT_SUMMARY.md`, the PDF, the website and both proof pages (noting that
+GitHub renders the PDF inline but will not render the HTML, so those need a local clone), the
+headline numbers, and the two caveats — enhancement hurting detection, and no available
+comparison to published work — stated up front rather than left to be discovered.
+
+**Kept deliberately, per the brief's caution about clutter:**
+`configs/train_stage1_union.yaml` and `train_stage2_finetune.yaml` are cited as reproducibility
+artefacts in `reports/FINAL_REPORT_SESSION6.md` §6 and stay. `tools/_*.py` probe scripts stay —
+several are cited by name in the reports as the evidence behind a finding. Nothing was deleted
+this session.

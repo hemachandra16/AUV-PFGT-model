@@ -50,16 +50,16 @@ when the outcome contradicted the hypothesis — which was most of the time.
 
 | # | Report | What it found |
 |---|---|---|
-| 1 | [`FINAL_REPORT.md`](FINAL_REPORT.md) | The physics-guided attention module had **no Q/K/V projections** and was provably incapable of the colour shift it existed for. Also: evaluation was scoring training images, inflating PSNR by 2.13 dB, and the UCIQE implementation returned values in the millions. |
-| 2 | [`FINAL_REPORT_150EPOCH.md`](FINAL_REPORT_150EPOCH.md) | Fixing the attention and training to convergence gave **24.902 dB — below the pre-fix baseline.** Session 1's "it just needs more epochs" prediction, falsified. Also ran the enhancement→detection ablation. |
-| 3 | [`FINAL_REPORT_SESSION3.md`](FINAL_REPORT_SESSION3.md) | Reviewed every remaining module on design merit and found four more real defects. **25.364 dB with 15.4% fewer parameters** — the first configuration to beat the baseline, and the one still installed. |
-| 4 | [`FINAL_REPORT_SESSION4.md`](FINAL_REPORT_SESSION4.md) | Chased an apparent +3.2 dB of colour-correction headroom. Got **24.982 dB — worse** — and then measured that only **24.4% of that headroom was ever reachable**, because the benchmark's references are hand-retouched. The claim was retired. |
-| 5 | [`DATASET_EXPANSION_FEASIBILITY.md`](DATASET_EXPANSION_FEASIBILITY.md) | Verification-only: LSUI and EUVP are fetchable, and — checked by perceptual hashing validated against a positive control — **contain none of the 89 held-out test images.** |
-| 6 | [`FINAL_REPORT_SESSION6.md`](FINAL_REPORT_SESSION6.md) | 6.3× more training data at matched gradient steps gave **25.334 dB — 0.031 dB below session 3.** More data did not help, and the colour-style mismatch the two-stage recipe existed to prevent **never occurred**. |
+| 1 | [`FINAL_REPORT.md`](reports/FINAL_REPORT.md) | The physics-guided attention module had **no Q/K/V projections** and was provably incapable of the colour shift it existed for. Also: evaluation was scoring training images, inflating PSNR by 2.13 dB, and the UCIQE implementation returned values in the millions. |
+| 2 | [`FINAL_REPORT_150EPOCH.md`](reports/FINAL_REPORT_150EPOCH.md) | Fixing the attention and training to convergence gave **24.902 dB — below the pre-fix baseline.** Session 1's "it just needs more epochs" prediction, falsified. Also ran the enhancement→detection ablation. |
+| 3 | [`FINAL_REPORT_SESSION3.md`](reports/FINAL_REPORT_SESSION3.md) | Reviewed every remaining module on design merit and found four more real defects. **25.364 dB with 15.4% fewer parameters** — the first configuration to beat the baseline, and the one still installed. |
+| 4 | [`FINAL_REPORT_SESSION4.md`](reports/FINAL_REPORT_SESSION4.md) | Chased an apparent +3.2 dB of colour-correction headroom. Got **24.982 dB — worse** — and then measured that only **24.4% of that headroom was ever reachable**, because the benchmark's references are hand-retouched. The claim was retired. |
+| 5 | [`DATASET_EXPANSION_FEASIBILITY.md`](reports/DATASET_EXPANSION_FEASIBILITY.md) | Verification-only: LSUI and EUVP are fetchable, and — checked by perceptual hashing validated against a positive control — **contain none of the 89 held-out test images.** |
+| 6 | [`FINAL_REPORT_SESSION6.md`](reports/FINAL_REPORT_SESSION6.md) | 6.3× more training data at matched gradient steps gave **25.334 dB — 0.031 dB below session 3.** More data did not help, and the colour-style mismatch the two-stage recipe existed to prevent **never occurred**. |
 | 7 | [`docs/novelty_assessment.md`](docs/novelty_assessment.md) | The literature check. Verdict: **none of this project's architectural ideas are novel**, with citations for each mechanism. |
-| 8 | [`FINAL_REPORT_SESSION8.md`](FINAL_REPORT_SESSION8.md) | Went looking for the standard UIEB test split to get a comparable number. **There is no standard split**, and the one published list that exists is 87.8% inside this project's training data. Measured the memorisation gap at **+4.88 dB**. |
+| 8 | [`FINAL_REPORT_SESSION8.md`](reports/FINAL_REPORT_SESSION8.md) | Went looking for the standard UIEB test split to get a comparable number. **There is no standard split**, and the one published list that exists is 87.8% inside this project's training data. Measured the memorisation gap at **+4.88 dB**. |
 
-Full chronological log, including every decision and its reasoning: [`PROGRESS.md`](PROGRESS.md).
+Full chronological log, including every decision and its reasoning: [`PROGRESS.md`](reports/PROGRESS.md).
 
 ---
 

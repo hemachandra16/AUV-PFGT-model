@@ -10,6 +10,32 @@
 
 ---
 
+## Start here
+
+New to this repository? Read these before the setup instructions below.
+
+| | |
+|---|---|
+| **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** | **The place to start.** Headline results, the three things worth knowing up front, an index of all eight session reports, and the known limitations. |
+| **[The full report — PDF](outputs/PFGT-UIE_report.pdf)** | 18 pages: architecture module by module, results, the research journey, the novelty assessment, references. Renders directly in GitHub's file viewer. |
+| **[The full report — website](outputs/website.html)** | Same content as a single self-contained page. GitHub will not render HTML inline — clone the repo and open the file, or use the PDF above. |
+| **[Enhancement: see it yourself](outputs/session4_proof.html)** | Held-out photographs, original versus enhanced versus human reference — including the ones the model made *worse*. Open locally. |
+| **[Detection: see it yourself](outputs/detection_proof.html)** | Predicted boxes beside human-marked ground truth, covering the detector's worst classes as well as its best. Open locally. |
+
+**Results at a glance.** Enhancement: 25.364 dB PSNR / 0.9289 SSIM on 89 held-out UIEB images.
+Detection: mAP@0.5 = 0.829 over 4,200 held-out RUOD images across ten marine classes
+(precision 83.9%, recall 75.6%). Two caveats stated up front rather than buried: **enhancement
+makes detection worse, not better** — the pipeline detects on raw frames by design — and **no
+comparison to published UIEB numbers is available**, because there is no standard test split to
+compare on. Both are documented in full in
+[`reports/FINAL_REPORT_SESSION8.md`](reports/FINAL_REPORT_SESSION8.md) and
+[`docs/standard_split_investigation.md`](docs/standard_split_investigation.md).
+
+Every session's working log lives in [`reports/`](reports/); the full chronological record is
+[`reports/PROGRESS.md`](reports/PROGRESS.md).
+
+---
+
 ## Architecture Overview
 
 ```
@@ -59,7 +85,7 @@ Standard attention: `Softmax(QKᵀ / √d) · V`
 
 where **P** is a learned physics bias derived from the Physics Prior Encoder. This allows the transformer to focus on regions with severe degradation (attenuation, scattering, color distortion).
 
-This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in [`FINAL_REPORT.md`](FINAL_REPORT.md).
+This is a known mechanism class rather than a contribution of this project — see [`docs/novelty_assessment.md`](docs/novelty_assessment.md). It is worth noting that in the original implementation this module had no Q/K/V projections at all and was provably incapable of the colour shift it existed to perform; the diagnosis and the falsification test are in [`FINAL_REPORT.md`](reports/FINAL_REPORT.md).
 
 ---
 
